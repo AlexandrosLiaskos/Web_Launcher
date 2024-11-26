@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Web Launcher Import",
+  "version": "1.0",
+  "description": "Import frequently visited sites into Web Launcher",
+  "permissions": [
+    "history",
+    "bookmarks"
+  ],
+  "host_permissions": [
+    "http://localhost:*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Web Launcher Import"
+  }
+}

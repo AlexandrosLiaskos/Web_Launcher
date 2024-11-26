@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "name": "Web Launcher Import",
+  "version": "1.0",
+  "description": "Import frequently visited sites into Web Launcher",
+  "permissions": [
+    "history",
+    "bookmarks"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "web-launcher@example.com"
+    }
+  },
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "browser_action": {
+    "default_title": "Web Launcher Import"
+  }
+}

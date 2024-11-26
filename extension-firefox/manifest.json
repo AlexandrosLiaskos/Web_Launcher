@@ -1,0 +1,32 @@
+{
+  "manifest_version": 2,
+  "name": "Web Launcher Import",
+  "version": "1.0",
+  "description": "Import frequently visited sites into Web Launcher",
+  "permissions": [
+    "history",
+    "bookmarks",
+    "tabs",
+    "http://localhost/*",
+    "https://localhost/*"
+  ],
+  "applications": {
+    "gecko": {
+      "id": "web-launcher@example.com",
+      "strict_min_version": "57.0"
+    }
+  },
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "browser_action": {
+    "default_title": "Web Launcher Import"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost/*", "https://localhost/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
