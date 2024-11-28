@@ -1,9 +1,8 @@
-# Web Launcher
-
 <div align="center">
+  
+# Web Launcher 🚀
 
-<img src="https://github.com/user-attachments/assets/85cddc06-e40e-45dc-bce9-fab67faf9553" width="200" alt="server">
-
+<img src="https://github.com/user-attachments/assets/85cddc06-e40e-45dc-bce9-fab67faf9553" width="200" alt="Web Launcher Logo">
 
 [![Deploy to GitHub Pages](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml/badge.svg)](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -11,127 +10,124 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-4.4.5-646cff.svg)](https://vitejs.dev/)
 
+**Your central command center for professional web navigation**
+
+[View Demo](https://demo-link) • [Documentation](docs/) • [Report Bug](issues) • [Request Feature](issues)
+
+![Dashboard Preview](https://github.com/user-attachments/assets/eb7f704d-f115-4590-a0a5-a016e316da51)
+
 </div>
 
-### An advanced web application designed to help you organize and quickly access websites from a central dashboard.
+## 🌟 Key Features
 
-![image](https://github.com/user-attachments/assets/eb7f704d-f115-4590-a0a5-a016e316da51)
+### ⌨️ Command Mode
+- Trigger with `Shift + :` or type `>`
+- Powerful command palette for quick actions:
+  ```
+  > add     // Add new website
+  > edit    // Edit existing entry
+  > import  // Import from browser
+  > view    // Switch view mode
+  ```
 
-## Features
+### 🔍 Intelligent Search
+- Fuzzy search across all fields
+- Tag-based filtering with `@` prefix
+- Real-time results as you type
+- Keyboard shortcuts for rapid navigation
 
-### Command Mode
-- Activate with `Shift + :` or type `>`
-- Commands for managing websites:
-  - Add new websites
-  - Edit existing entries
-  - Delete websites
-  - Import sites from browser
-  - Switch views
-  - Access settings
-
-### Search and Navigation
-- Fuzzy search through titles, URLs, descriptions, and categories
-- Tag-based search using `@` prefix
-- Real-time filtering as you type
-- Keyboard-first navigation:
-  - `Alt` to cycle through sites
-  - `Enter` to open selected site
-  - Arrow keys for movement
-  - `Esc` to clear/close search
-  - `/` to focus search
-  - Custom keyboard shortcuts
-
-### Website Management
-- Organize websites with tags and categories
-- Add detailed descriptions
-- Automatic favicon fetching
-- Right-click context menu for quick actions
-- Bulk import from browser history/bookmarks
-- Preview generation
-
-### User Interface
-- Multiple view options:
-  - Grid view
-  - List view
-  - Group/folder view
-- Responsive design for all screen sizes
-- Aurora background effects
+### 📱 Smart UI
+- Multiple view options (Grid/List/Group)
+- Responsive design for all devices
+- Dynamic aurora background effects
 - Dark/light theme support
+- Automatic favicon fetching
+- Site previews
 
-### Data Management
-- Google authentication for secure sign-in
-- Real-time data synchronization via Firebase
+### ☁️ Seamless Sync
+- Google authentication
+- Real-time Firebase synchronization
 - Offline support
-- Multi-device synchronization
-- Automatic data backup
-- Data export/import capabilities
+- Automatic backups
+- Cross-device accessibility
 
-### Browser Integration
-- Chrome extension support
-- Firefox extension support
-- Import from browser history
-- Import from bookmarks
+## ⚡ Quick Start
 
-## Setup
+1. **Prerequisites**
+   ```bash
+   Node.js 16+
+   ```
 
-1. Install Node.js 16+
-2. Clone and install:
-```bash
-git clone https://github.com/yourusername/Web_Launcher.git
-cd Web_Launcher
-npm install
-npm run dev
-```
+2. **Installation**
+   ```bash
+   git clone https://github.com/yourusername/Web_Launcher.git
+   cd Web_Launcher
+   npm install
+   ```
 
-3. Create `.env` with your Firebase keys:
-```env
-VITE_FIREBASE_API_KEY=your_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_domain
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-```
+3. **Configuration**
+   Create `.env`:
+   ```env
+   VITE_FIREBASE_API_KEY=your_api_key
+   VITE_FIREBASE_AUTH_DOMAIN=your_domain
+   VITE_FIREBASE_PROJECT_ID=your_project_id
+   VITE_FIREBASE_STORAGE_BUCKET=your_bucket
+   VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+   VITE_FIREBASE_APP_ID=your_app_id
+   ```
 
-## Keyboard Shortcuts
+4. **Launch**
+   ```bash
+   npm run dev
+   ```
+
+## ⌨️ Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `Shift + :` | Enter command mode |
-| `>` | Enter command mode |
-| `Alt` | Switch between sites |
-| `Enter` | Open selected site |
+| `Shift + :` | Command mode |
+| `>` | Command mode |
+| `Alt` | Cycle sites |
+| `Enter` | Open site |
 | `/` | Focus search |
-| `Esc` | Close/clear current action |
-| `←↑↓→` | Navigate through sites |
+| `Esc` | Clear/close |
+| `←↑↓→` | Navigate |
 
-## Tech Stack
+## 🛠️ Tech Stack
 
-- React 18.2.0 + TypeScript 5.0.2
-- Firebase for authentication and storage
-- Zustand for state management
-- Vite 4.4.5 for building
-- Tailwind CSS for styling
-- React Router for navigation
-- React Query for data fetching
+- **Frontend**: React 18.2.0, TypeScript 5.0.2
+- **Build**: Vite 4.4.5
+- **Styling**: Tailwind CSS
+- **State**: Zustand
+- **Data**: Firebase, React Query
+- **Routing**: React Router
 
-## 📈 Performance Metrics
+## 📊 Performance
 
-- **Load Time**: < 1.5s initial load
-- **Time to Interactive**: < 2s
-- **Lighthouse Score**: 90+ across all metrics
-- **Offline Capability**: Full functionality maintained
+| Metric | Score |
+|--------|--------|
+| Initial Load | < 1.5s |
+| Time to Interactive | < 2s |
+| Lighthouse Score | 90+ |
+| Offline Support | ✅ |
 
-## 📄 License
+## 🔧 Browser Support
 
-Web Launcher is available under the MIT License. See the [LICENSE](LICENSE) file for more information.
+- Chrome extension
+- Firefox add-on
+- Browser history import
+- Bookmark integration
+
+## 📖 License
+
+Web Launcher is [MIT licensed](LICENSE).
 
 ---
 
 <div align="center">
 
-**Web Launcher** - Elevating Professional Web Navigation
+### Show your support! ⭐
 
-[Documentation](docs/) • [Report Bug](issues) • [Request Feature](issues)
+[Star this repo](https://github.com/yourusername/Web_Launcher) if you found it helpful!
 
 </div>
