@@ -10,9 +10,9 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-4.4.5-646cff.svg)](https://vitejs.dev/)
 
-**Your central command center for professional web navigation**
+**An advanced web application designed to help you organize and quickly access websites from a central dashboard.**
 
-[View Demo](https://demo-link) • [Documentation](docs/) • [Report Bug](issues) • [Request Feature](issues)
+[Try Web Launcher](https://alexandrosliaskos.github.io/Web_MS/) 
 
 ![Dashboard Preview](https://github.com/user-attachments/assets/eb7f704d-f115-4590-a0a5-a016e316da51)
 
