@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![server](https://github.com/user-attachments/assets/85cddc06-e40e-45dc-bce9-fab67faf9553)
+<img src="https://github.com/user-attachments/assets/85cddc06-e40e-45dc-bce9-fab67faf9553" width="200" alt="server">
 
 
 [![Deploy to GitHub Pages](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml/badge.svg)](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml)
