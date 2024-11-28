@@ -20,16 +20,6 @@
 
 ## 🌟 Key Features
 
-### ⌨️ Command Mode
-- Trigger with `Shift + :` or type `>`
-- Powerful command palette for quick actions:
-  ```
-  > add     // Add new website
-  > edit    // Edit existing entry
-  > import  // Import from browser
-  > view    // Switch view mode
-  ```
-
 ### 🔍 Intelligent Search
 - Fuzzy search across all fields
 - Tag-based filtering with `@` prefix
