@@ -94,10 +94,9 @@
 
 ## 🔧 Browser Support
 
-- Chrome extension
-- Firefox add-on
-- Browser history import
-- Bookmark integration
+- Chrome
+- Firefox
+- Alternatives based on Chrome or Firefox
 
 ## 📖 License
 
