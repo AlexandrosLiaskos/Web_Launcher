@@ -11,6 +11,7 @@
   [![Vite](https://img.shields.io/badge/Vite-4.4.5-646cff.svg)](https://vitejs.dev/)
   
 🌐 [Try it now!](https://alexandrosliaskos.github.io/Web_MS/)
+
 **An advanced web application designed to help you organize and quickly access websites from a central dashboard.**
 
 <img src="https://github.com/user-attachments/assets/eb7f704d-f115-4590-a0a5-a016e316da51" width="600" alt="Dashboard Preview">
