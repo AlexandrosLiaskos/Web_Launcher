@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/Web_Launcher/',  // Add this line - should match your repository name
+  base: './',
   server: {
     port: 3001,
     open: true
@@ -12,12 +12,45 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: undefined,
-      },
+        manualChunks: {
+          'vendor': [
+            'react',
+            'react-dom',
+            'firebase/app',
+            'firebase/auth',
+            'firebase/firestore',
+            'zustand'
+          ],
+          'ui': [
+            '@heroicons/react',
+            'framer-motion',
+            'clsx',
+            'tailwind-merge'
+          ]
+        },
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash].[ext]'
+      }
     },
-    chunkSizeWarningLimit: 1000,
-    assetsInlineLimit: 4096,
+    minify: 'esbuild',
+    target: 'esnext'
   },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'firebase/app',
+      'firebase/auth',
+      'firebase/firestore',
+      'zustand',
+      '@heroicons/react',
+      'framer-motion',
+      'clsx',
+      'tailwind-merge'
+    ]
+  }
 })
