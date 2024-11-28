@@ -12,7 +12,7 @@
 
 **An advanced web application designed to help you organize and quickly access websites from a central dashboard.**
 
-# [View on Web Launcher ↗](https://alexandrosliaskos.github.io/Web_MS/) 
+## [View on Web Launcher ↗](https://alexandrosliaskos.github.io/Web_MS/) 
 
 <img src="https://github.com/user-attachments/assets/eb7f704d-f115-4590-a0a5-a016e316da51" width="600" alt="Dashboard Preview">
 
