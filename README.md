@@ -1,15 +1,16 @@
-<div align="center">
+  <div align="center">
+    
+  # [Web Launcher 🚀](https://alexandrosliaskos.github.io/Web_MS/) 
   
-# [Web Launcher 🚀](https://alexandrosliaskos.github.io/Web_MS/) 
-
-<img src="https://github.com/user-attachments/assets/85cddc06-e40e-45dc-bce9-fab67faf9553" width="200" alt="Web Launcher Logo">
-
-[![Deploy to GitHub Pages](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml/badge.svg)](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![React](https://img.shields.io/badge/React-18.2.0-61dafb.svg)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0.2-blue.svg)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-4.4.5-646cff.svg)](https://vitejs.dev/)
-
+  <img src="https://github.com/user-attachments/assets/85cddc06-e40e-45dc-bce9-fab67faf9553" width="200" alt="Web Launcher Logo">
+  
+  [![Deploy to GitHub Pages](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml/badge.svg)](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+  [![React](https://img.shields.io/badge/React-18.2.0-61dafb.svg)](https://reactjs.org/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-5.0.2-blue.svg)](https://www.typescriptlang.org/)
+  [![Vite](https://img.shields.io/badge/Vite-4.4.5-646cff.svg)](https://vitejs.dev/)
+  
+🌐 [Try it now!](https://alexandrosliaskos.github.io/Web_MS/)
 **An advanced web application designed to help you organize and quickly access websites from a central dashboard.**
 
 <img src="https://github.com/user-attachments/assets/eb7f704d-f115-4590-a0a5-a016e316da51" width="600" alt="Dashboard Preview">
