@@ -13,9 +13,7 @@
 
 </div>
 
-# Web Launcher
-
-An advanced web application designed to help you organize and quickly access websites from a central dashboard.
+## An advanced web application designed to help you organize and quickly access websites from a central dashboard.
 
 ![image](https://github.com/user-attachments/assets/eb7f704d-f115-4590-a0a5-a016e316da51)
 
