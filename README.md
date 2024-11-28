@@ -26,14 +26,6 @@
 - Real-time results as you type
 - Keyboard shortcuts for rapid navigation
 
-### 📱 Smart UI
-- Multiple view options (Grid/List/Group)
-- Responsive design for all devices
-- Dynamic aurora background effects
-- Dark/light theme support
-- Automatic favicon fetching
-- Site previews
-
 ### ☁️ Seamless Sync
 - Google authentication
 - Real-time Firebase synchronization
