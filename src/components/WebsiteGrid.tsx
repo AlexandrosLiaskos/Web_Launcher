@@ -12,6 +12,7 @@ interface WebsiteGridProps {
   mode: 'normal' | 'edit' | 'delete' | 'search' | 'add' | 'import'
   onEdit: (website: Website) => void
   onDelete: (websiteId: string) => void
+  selectedIndex?: number
 }
 
 interface ContextMenuProps {
@@ -104,10 +105,16 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, website, onEdit, onDele
   );
 };
 
-export const WebsiteGrid: FC<WebsiteGridProps> = ({ websites, onSelect, mode, onEdit, onDelete }) => {
+export const WebsiteGrid: FC<WebsiteGridProps> = ({ 
+  websites, 
+  onSelect, 
+  mode, 
+  onEdit, 
+  onDelete,
+  selectedIndex: propSelectedIndex = -1 
+}) => {
   const { addVisit } = useWebsiteStore()
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; website: Website } | null>(null)
-  const [selectedIndex, setSelectedIndex] = useState<number>(-1)
   const gridRef = useRef<HTMLDivElement>(null)
   const isEditMode = mode === 'edit';
 
@@ -118,6 +125,7 @@ export const WebsiteGrid: FC<WebsiteGridProps> = ({ websites, onSelect, mode, on
 
   const handleContextMenu = (e: React.MouseEvent, website: Website) => {
     e.preventDefault();
+    e.stopPropagation();
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
@@ -125,71 +133,15 @@ export const WebsiteGrid: FC<WebsiteGridProps> = ({ websites, onSelect, mode, on
     });
   };
 
-  // Handle keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (mode === 'edit' && e.key === 'Escape') {
-        setSelectedIndex(-1);
-        return;
-      }
-
-      if (mode !== 'normal' || !gridRef.current) return;
-
-      const cols = window.innerWidth >= 1280 ? 5 : // xl
-                window.innerWidth >= 1024 ? 4 : // lg
-                window.innerWidth >= 768 ? 3 : // md
-                window.innerWidth >= 640 ? 2 : // sm
-                1; // default
-
-      switch (e.key) {
-        case 'ArrowRight':
-          e.preventDefault();
-          setSelectedIndex(prev => 
-            prev < websites.length - 1 ? prev + 1 : prev
-          );
-          break;
-        case 'ArrowLeft':
-          e.preventDefault();
-          setSelectedIndex(prev => 
-            prev > 0 ? prev - 1 : prev
-          );
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setSelectedIndex(prev => {
-            const newIndex = prev - cols;
-            return newIndex >= 0 ? newIndex : prev;
-          });
-          break;
-        case 'ArrowDown':
-          e.preventDefault();
-          setSelectedIndex(prev => {
-            const newIndex = prev + cols;
-            return newIndex < websites.length ? newIndex : prev;
-          });
-          break;
-        case 'Enter':
-          e.preventDefault();
-          if (selectedIndex >= 0 && selectedIndex < websites.length) {
-            const website = websites[selectedIndex];
-            if (mode === 'normal') {
-              handleSelect(website);
-            } else {
-              onSelect(website);
-            }
-          }
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mode, selectedIndex, websites, onSelect]);
+  const handleSelect = (website: Website) => {
+    addVisit(website.id)
+    onSelect(website)
+  }
 
   // Scroll selected item into view
   useEffect(() => {
-    if (selectedIndex >= 0 && gridRef.current) {
-      const selectedElement = gridRef.current.children[selectedIndex] as HTMLElement;
+    if (propSelectedIndex >= 0 && gridRef.current) {
+      const selectedElement = gridRef.current.children[propSelectedIndex] as HTMLElement;
       if (selectedElement) {
         selectedElement.scrollIntoView({
           behavior: 'smooth',
@@ -197,42 +149,7 @@ export const WebsiteGrid: FC<WebsiteGridProps> = ({ websites, onSelect, mode, on
         });
       }
     }
-  }, [selectedIndex]);
-
-  const handleSelect = (website: Website) => {
-    if (!isValidUrl(website.url)) {
-      console.error('Invalid URL:', website.url);
-      return;
-    }
-    const secureUrl = ensureHttps(website.url);
-    addVisit(website.id);
-    try {
-      window.open(secureUrl, '_blank', 'noopener,noreferrer');
-    } catch (error) {
-      console.error('Error opening URL:', error);
-    }
-  }
-
-  if (!websites || websites.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center p-8 text-center">
-        <div className="text-gray-400 mb-4">No websites found</div>
-        <button
-          onClick={() => onSelect({
-            id: '', title: '', url: '', visits: 0, lastVisited: 0, frecency: 0,
-            preview: undefined,
-            totalVisits: 0,
-            createdAt: 0,
-            tags: [],
-            userId: ''
-          })}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-        >
-          Add your first website
-        </button>
-      </div>
-    )
-  }
+  }, [propSelectedIndex]);
 
   return (
     <>
@@ -243,17 +160,12 @@ export const WebsiteGrid: FC<WebsiteGridProps> = ({ websites, onSelect, mode, on
         {websites.map((website, index) => (
           <div
             key={website.id}
+            onClick={() => handleSelect(website)}
             onContextMenu={(e) => handleContextMenu(e, website)}
-            onClick={() => {
-              setSelectedIndex(index);
-              if (mode === 'normal') {
-                handleSelect(website);
-              } else {
-                onSelect(website);
-              }
-            }}
-            className={`relative group bg-gray-800 rounded-lg overflow-hidden shadow-lg transition-all duration-200 transform hover:scale-105 cursor-pointer
-              ${isEditMode ? 'ring-2 ring-yellow-500 ring-offset-2 ring-offset-gray-900' : ''}
+            className={`
+              relative group bg-gray-800 rounded-lg overflow-hidden cursor-pointer
+              transition-all duration-200 hover:scale-[1.02] hover:shadow-xl
+              ${propSelectedIndex === index ? 'ring-2 ring-blue-500 shadow-lg' : ''}
             `}
           >
             <div className="relative">

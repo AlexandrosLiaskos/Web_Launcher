@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { useWebsiteStore, type Website } from './store/websiteStore'
 import { WebsiteGrid } from './components/WebsiteGrid'
-import { MagnifyingGlassIcon, PlusIcon, PencilSquareIcon, ArrowDownTrayIcon, XMarkIcon, CheckIcon, ExclamationTriangleIcon, TrashIcon } from '@heroicons/react/24/solid'
+import { MagnifyingGlassIcon, PlusIcon, PencilSquareIcon, ArrowDownTrayIcon, XMarkIcon, CheckIcon, ExclamationTriangleIcon, TrashIcon, FolderIcon } from '@heroicons/react/24/solid'
 import { generatePreview } from './utils/preview'
 import { AuroraBackground } from './components/ui/AuroraBackground';
 import { UserAuth } from './components/UserAuth';
 import { auth } from './config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import React from 'react'
+import React, { useMemo } from 'react'
+import { GroupSection } from './components/GroupSection';
+import { CanvasContextMenu } from './components/CanvasContextMenu';
 
 type CommandType = 'search' | 'add' | 'edit' | 'delete' | 'import'
 
@@ -74,10 +76,11 @@ const SHORTCUTS = {
   ENTER: 'Enter',
   UP: 'ArrowUp',
   DOWN: 'ArrowDown',
+  TAG_SEARCH_KEY: '@',
 } as const;
 
 function App() {
-  const { websites, loadWebsites, addWebsite, editWebsite: updateWebsite, removeWebsite } = useWebsiteStore()
+  const { websites, loadWebsites, addWebsite, editWebsite: updateWebsite, removeWebsite, getTags, addGroup } = useWebsiteStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchActive, setIsSearchActive] = useState(false)
   const [isCommandMode, setIsCommandMode] = useState(false)
@@ -90,6 +93,11 @@ function App() {
   const [showImportModal, setShowImportModal] = useState(false)
   const [importLoading, setImportLoading] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
+  const [searchMode, setSearchMode] = useState<'normal' | 'group'>('normal')
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [showTagsModal, setShowTagsModal] = useState(false)
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedWebsiteIndex, setSelectedWebsiteIndex] = useState<number>(-1);
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Reset states
@@ -132,16 +140,46 @@ function App() {
     loadWebsites()
   }, [])
 
-  // Filter websites based on search query
-  const filteredWebsites = searchQuery.trim() === '' 
-    ? websites 
-    : websites.filter(website => 
-        website.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        website.url.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        website.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        website.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        website.category?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+  // Filter websites based on search query and selected tag
+  const filteredWebsites = useMemo(() => {
+    let filtered = websites;
+
+    // Filter by selected tag if any
+    if (selectedTag) {
+      filtered = filtered.filter(website => website.tags.includes(selectedTag));
+    } 
+    // Apply search filter
+    else if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      // Check if search query starts with "@"
+      if (query.startsWith('@')) {
+        const tagQuery = query.slice(1).trim();
+        filtered = filtered.filter(website =>
+          website.tags.some(tag => tag.toLowerCase().includes(tagQuery))
+        );
+        // If exact match found, set the selected tag
+        const exactMatch = [...new Set(websites.flatMap(w => w.tags))]
+          .find(tag => tag.toLowerCase() === tagQuery);
+        if (exactMatch && !selectedTag) {
+          setSelectedTag(exactMatch);
+        }
+      } else {
+        filtered = filtered.filter(website =>
+          website.title.toLowerCase().includes(query) ||
+          website.url.toLowerCase().includes(query) ||
+          website.tags.some(tag => tag.toLowerCase().includes(query))
+        );
+      }
+    }
+
+    return filtered;
+  }, [websites, searchQuery, selectedTag]);
+
+  // Reset selected website index when filtered websites change
+  useEffect(() => {
+    // Always select the first website if there are any
+    setSelectedWebsiteIndex(filteredWebsites.length > 0 ? 0 : -1);
+  }, [filteredWebsites]);
 
   // Filter commands based on search
   const getFilteredCommands = () => {
@@ -205,6 +243,9 @@ function App() {
       } else if (e.shiftKey && e.key === ':') {
         e.preventDefault();
         activateCommandMode();
+      } else if (e.shiftKey && e.key.toLowerCase() === 'g' && !isCommandMode) {
+        e.preventDefault();
+        setSearchMode(prev => prev === 'normal' ? 'group' : 'normal');
       }
 
       // Handle forward slash for search
@@ -228,6 +269,23 @@ function App() {
         e.preventDefault();
         e.stopPropagation();
         activateCommandMode();
+        return;
+      }
+
+      // Handle @ for tag search
+      if (e.key === SHORTCUTS.TAG_SEARCH_KEY && 
+          !e.ctrlKey && 
+          !e.metaKey && 
+          !e.altKey && 
+          !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!searchQuery.startsWith('@')) {
+          setSearchQuery('@');
+          if (inputRef.current) {
+            inputRef.current.focus();
+          }
+        }
         return;
       }
 
@@ -257,12 +315,32 @@ function App() {
             break;
         }
       }
+
+      // Handle keyboard navigation for filtered websites
+      if (e.key === SHORTCUTS.ESCAPE) {
+        e.preventDefault();
+        e.stopPropagation();
+        resetStates();
+      } else if (!isCommandMode && filteredWebsites.length > 0) {
+        if (e.altKey) {
+          e.preventDefault();
+          setSelectedWebsiteIndex(prev => 
+            prev >= filteredWebsites.length - 1 ? 0 : prev + 1
+          );
+        } else if (e.key === SHORTCUTS.ENTER && selectedWebsiteIndex >= 0) {
+          e.preventDefault();
+          const selectedWebsite = filteredWebsites[selectedWebsiteIndex];
+          if (selectedWebsite) {
+            window.open(selectedWebsite.url, '_blank');
+          }
+        }
+      }
     };
 
     // Use capture phase to handle shortcuts before other handlers
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [isSearchActive, isCommandMode, filteredCommands, selectedCommandIndex, showModal, showImportModal]);
+  }, [isSearchActive, isCommandMode, filteredCommands, selectedCommandIndex, showModal, showImportModal, filteredWebsites, selectedWebsiteIndex]);
 
   // Keep selected command in view
   useEffect(() => {
@@ -582,52 +660,133 @@ function App() {
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts if we're typing in an input
+      // Don't trigger if we're in an input or contentEditable
       if (
-        document.activeElement instanceof HTMLInputElement ||
-        document.activeElement instanceof HTMLTextAreaElement
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
       ) {
-        // But allow Escape to work even in input fields
-        if (e.key === 'Escape') {
-          if (showModal) {
-            e.preventDefault();
-            handleCloseModal();
-          } else if (selectedCommand === 'edit') {
-            e.preventDefault();
-            setSelectedCommand('search');
-            resetStates();
-          }
-        }
         return;
       }
 
-      // Handle global shortcuts
-      if (e.key === 'Escape') {
+      if (e.shiftKey && e.key === ':' && !isCommandMode) {
         e.preventDefault();
-        if (showModal) {
-          handleCloseModal();
-        } else if (selectedCommand === 'edit') {
-          setSelectedCommand('search');
-          resetStates();
-        } else {
-          resetStates();
+        setIsCommandMode(true);
+        setSelectedCommand('search');
+        if (inputRef.current) {
+          inputRef.current.focus();
         }
-      } else if (e.key === '/' && !isCommandMode && selectedCommand !== 'edit') {
+      } else if (e.key === '/' && !isCommandMode) {
         e.preventDefault();
-        activateSearch();
-      } else if (e.shiftKey && e.key === ':' && selectedCommand !== 'edit') {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      } else if (e.key === '@' && !isCommandMode) {
         e.preventDefault();
-        activateCommandMode();
+        setSearchQuery('@');
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isCommandMode, showModal, showImportModal, selectedCommand]);
+  }, [isCommandMode]);
+
+  // Handle context menu
+  const handleContextMenu = (e: React.MouseEvent) => {
+    // Only show context menu if clicking on the main container or empty space
+    const target = e.target as HTMLElement;
+    if (target.closest('.website-card') || target.closest('.folder-item') || target.closest('.group-section')) {
+      return;
+    }
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, []);
+
+  // Handle folder click
+  const handleFolderClick = (tag: string) => {
+    // If clicking the same tag, clear the filter
+    if (selectedTag === tag) {
+      setSelectedTag(null);
+      setSearchQuery('');
+    } else {
+      setSelectedTag(tag);
+      // Set search query to show the tag search with @
+      setSearchQuery(`@${tag}`);
+    }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    // Clear selected tag if search is cleared or doesn't match current tag
+    if (!value.trim() || (selectedTag && !value.toLowerCase().includes(selectedTag.toLowerCase()))) {
+      setSelectedTag(null);
+    }
+  };
+
+  // Handle keyboard navigation for filtered websites
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === SHORTCUTS.ESCAPE) {
+      e.preventDefault();
+      e.stopPropagation();
+      resetStates();
+    } else if (!isCommandMode && filteredWebsites.length > 0) {
+      if (e.altKey) {
+        e.preventDefault();
+        setSelectedWebsiteIndex(prev => 
+          prev >= filteredWebsites.length - 1 ? 0 : prev + 1
+        );
+      } else if (e.key === SHORTCUTS.ENTER && selectedWebsiteIndex >= 0) {
+        e.preventDefault();
+        const selectedWebsite = filteredWebsites[selectedWebsiteIndex];
+        if (selectedWebsite) {
+          window.open(selectedWebsite.url, '_blank');
+        }
+      }
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [filteredWebsites, selectedWebsiteIndex]);
 
   return (
     <AuroraBackground>
-      <div className="min-h-screen">
+      <div 
+        className="min-h-screen"
+        onContextMenu={handleContextMenu}
+        onKeyDown={(e) => {
+          if (e.shiftKey && e.key === ':') {
+            e.preventDefault();
+            setIsCommandMode(true);
+            setSelectedCommand('search');
+            if (inputRef.current) {
+              inputRef.current.focus();
+            }
+          }
+          // Handle @ for tag search
+          else if (e.key === '@') {
+            e.preventDefault();
+            if (!searchQuery.startsWith('@')) {
+              setSearchQuery('@');
+              if (inputRef.current) {
+                inputRef.current.focus();
+              }
+            }
+          }
+        }}
+        tabIndex={-1}
+      >
         {/* Top Bar with Search and User Info */}
         <div className="sticky top-0 z-30 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800 shadow-lg">
           <div className="container mx-auto px-6 py-4">
@@ -640,31 +799,158 @@ function App() {
                 ref={inputRef}
                 type="text"
                 value={searchQuery}
-                onChange={handleSearchInputChange}
-                onKeyDown={handleSearchInputKeyDown}
-                placeholder={isCommandMode ? 'Type a command...' : 'Press / to search, Shift+: for commands'}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    resetStates();
+                  } else if (e.shiftKey && e.key === ':') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    activateCommandMode();
+                  } else if (isCommandMode && filteredCommands.length > 0) {
+                    switch (e.key) {
+                      case SHORTCUTS.UP:
+                        e.preventDefault();
+                        setSelectedCommandIndex(prev => 
+                          prev > 0 ? prev - 1 : filteredCommands.length - 1
+                        );
+                        break;
+                      case SHORTCUTS.DOWN:
+                        e.preventDefault();
+                        setSelectedCommandIndex(prev => 
+                          prev < filteredCommands.length - 1 ? prev + 1 : 0
+                        );
+                        break;
+                      case SHORTCUTS.ENTER:
+                        e.preventDefault();
+                        const selectedCommand = filteredCommands[selectedCommandIndex];
+                        if (selectedCommand) {
+                          selectCommand(selectedCommand);
+                        }
+                        break;
+                    }
+                  }
+                }}
+                placeholder={isCommandMode ? 'Type a command...' : 'Press / to search, @ for tags, Shift+: for commands'}
                 className="w-full bg-gray-800 text-white px-4 py-3 pl-12 rounded-lg shadow-lg border border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none text-lg"
               />
               <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center space-x-2 text-gray-400">
-                <kbd className="px-2 py-1 text-xs bg-gray-700 rounded">
-                  {isCommandMode ? 'Shift + :' : '/'}
-                </kbd>
-              </div>
             </div>
           </div>
         </div>
 
         {/* Main Content */}
         <main className="container mx-auto px-6 py-8">
-          <WebsiteGrid 
-            websites={filteredWebsites}
-            onSelect={handleWebsiteSelect}
-            mode={selectedCommand === 'search' ? 'normal' : selectedCommand}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-          />
+          <div className="flex gap-6">
+            {/* Left Sidebar */}
+            <div className="w-64 flex-shrink-0 group-section">
+              <GroupSection 
+                onSelect={handleWebsiteSelect} 
+                onAddWebsite={() => {
+                  setEditingWebsite(DEFAULT_WEBSITE);
+                  setShowModal(true);
+                }}
+                onFolderClick={handleFolderClick}
+              />
+            </div>
+
+            {/* Main Grid */}
+            <div className="flex-1">
+              {selectedCommand === 'search' || selectedCommand === 'edit' || selectedCommand === 'delete' ? (
+                <>
+                  {selectedTag && (
+                    <div className="mb-4 flex items-center gap-2">
+                      <div className="px-3 py-1.5 bg-gray-800 rounded-lg flex items-center gap-2">
+                        <FolderIcon className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-200">{selectedTag}</span>
+                        <button
+                          onClick={() => {
+                            setSelectedTag(null);
+                            setSearchQuery('');
+                          }}
+                          className="ml-2 text-gray-400 hover:text-gray-300"
+                        >
+                          <XMarkIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <WebsiteGrid 
+                    websites={filteredWebsites}
+                    onSelect={handleWebsiteSelect}
+                    mode={selectedCommand}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    selectedIndex={selectedWebsiteIndex}
+                  />
+                </>
+              ) : (
+                <div className="text-center py-12 text-gray-400">
+                  No results found
+                </div>
+              )}
+            </div>
+          </div>
         </main>
+
+        {/* Context Menu */}
+        {contextMenu && (
+          <CanvasContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onClose={() => setContextMenu(null)}
+            onAddWebsite={() => {
+              setEditingWebsite(DEFAULT_WEBSITE);
+              setShowModal(true);
+            }}
+            onConvertTagToFolder={() => setShowTagsModal(true)}
+          />
+        )}
+
+        {/* Tags Modal */}
+        {showTagsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-gray-800 rounded-xl shadow-xl max-w-md w-full border border-gray-700">
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Add Folder</h3>
+                <div className="space-y-2">
+                  {getTags().filter(tag => 
+                    !websites.some(website => 
+                      website.tags.includes(tag)
+                    )
+                  ).map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => {
+                        addGroup(tag);
+                        setShowTagsModal(false);
+                      }}
+                      className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-between group"
+                    >
+                      <span className="text-gray-200 group-hover:text-white">{tag}</span>
+                      <span className="text-sm text-gray-400">
+                        {websites.filter(w => w.tags.includes(tag)).length} items
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {getTags().length === 0 && (
+                  <p className="text-gray-400 text-center py-4">No tags available to convert</p>
+                )}
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => setShowTagsModal(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Command Palette */}
         {isCommandMode && filteredCommands.length > 0 && (
@@ -739,11 +1025,7 @@ function App() {
                 <h2 className="text-xl font-semibold text-white mb-4">
                   {editingWebsite ? 'Edit Website' : 'Add Website'}
                 </h2>
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSubmit(e);
-                  handleCloseModal();
-                }} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">Title</label>
                     <input
@@ -780,28 +1062,70 @@ function App() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Tags (comma-separated)</label>
-                    <input
-                      type="text"
-                      value={editingWebsite.tags?.join(', ') || ''}
-                      onChange={(e) => setEditingWebsite(prev => ({ 
-                        ...prev, 
-                        tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
-                      }))}
-                      className="w-full bg-gray-800/90 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      placeholder="development, tools, productivity"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
-                    <input
-                      type="text"
-                      value={editingWebsite.category}
-                      onChange={(e) => setEditingWebsite(prev => ({ ...prev, category: e.target.value }))}
-                      className="w-full bg-gray-800/90 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      placeholder="Category"
-                    />
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Tags</label>
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        {editingWebsite?.tags?.map((tag) => (
+                          <span
+                            key={tag}
+                            className="px-2 py-1 bg-gray-700 text-gray-300 rounded-full text-sm flex items-center"
+                          >
+                            {tag}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newTags = editingWebsite.tags.filter(t => t !== tag);
+                                setEditingWebsite({ ...editingWebsite, tags: newTags });
+                              }}
+                              className="ml-1 text-gray-400 hover:text-gray-200"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="text"
+                          placeholder="Type tag name and press Enter ↵"
+                          className="flex-1 bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const input = e.currentTarget;
+                              const tag = input.value.trim();
+                              if (tag && !editingWebsite?.tags?.includes(tag)) {
+                                setEditingWebsite({
+                                  ...editingWebsite,
+                                  tags: [...(editingWebsite?.tags || []), tag],
+                                });
+                                input.value = '';
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+                      {/* Existing Tags Suggestions */}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {getTags()
+                          .filter(tag => !editingWebsite?.tags?.includes(tag))
+                          .map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => {
+                                setEditingWebsite({
+                                  ...editingWebsite,
+                                  tags: [...(editingWebsite?.tags || []), tag],
+                                });
+                              }}
+                              className="px-2 py-1 bg-gray-700 text-gray-400 rounded-full text-sm hover:bg-gray-600 hover:text-gray-200"
+                            >
+                              + {tag}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex justify-end gap-3 mt-6">
