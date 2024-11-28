@@ -10,7 +10,7 @@
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.0.2-blue.svg)](https://www.typescriptlang.org/)
   [![Vite](https://img.shields.io/badge/Vite-4.4.5-646cff.svg)](https://vitejs.dev/)
   
-🌐 [Try it now!](https://alexandrosliaskos.github.io/Web_MS/)
+  🌐 [Try it now!](https://alexandrosliaskos.github.io/Web_MS/)
 
 **An advanced web application designed to help you organize and quickly access websites from a central dashboard.**
 
