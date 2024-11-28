@@ -1,42 +1,72 @@
 # Web Launcher
 
-A modern, minimalistic website launcher inspired by PowerToys Run with intelligent website ranking based on visit frequency and recency. Features Google authentication and cross-browser synchronization.
+A modern web application launcher designed for efficient website management and quick access. Built with React and Firebase, it offers a PowerToys Run-inspired interface with real-time synchronization across browsers.
 
-## Features
-- 🚀 PowerToys Run-like interface for quick website access
-- 🔄 Cross-browser synchronization via Firebase
-- 🔑 Google account integration
-- 📊 Intelligent ranking system based on visit frequency and recency
-- 🎯 Tag-based website organization
-- 🎨 Modern, clean design with Aurora background
-- ⌨️ Keyboard-first navigation
-- 📱 Responsive design for all screen sizes
-- 🔍 Powerful search capabilities
-- 📂 Group-based organization
+## Core Features
 
-## Tech Stack
-- Frontend: React + TypeScript
-- Styling: Tailwind CSS
-- State Management: Zustand
-- Authentication: Firebase Auth
-- Database: Firebase Firestore
-- Build Tool: Vite
+### Authentication & Sync
+- Google account authentication
+- Real-time data synchronization via Firebase
+- Secure, user-specific data isolation
 
-## Keyboard Shortcuts
-- `Alt` - Cycle through websites
-- `Enter` - Open selected website
-- `/` - Focus search
-- `Esc` - Clear search/Close modals
+### Website Management
+- Quick website addition and organization
+- Automatic favicon fetching
+- Visit frequency tracking
+- Tag-based categorization
 
-## Getting Started
+### Interface
+- Clean, modern UI with Aurora background effect
+- Responsive design supporting all screen sizes
+- Context menus for advanced operations
+- Group-based website organization
+
+### Navigation
+- Fast keyboard-driven interface
+- Powerful search functionality
+- Tag filtering system
+- Website cycling with Alt key
+
+## Technical Stack
+
+### Frontend
+- React 18.2.0
+- TypeScript 5.0.2
+- Tailwind CSS 3.3.3
+- Heroicons 2.0.18
+
+### Backend & Services
+- Firebase Authentication
+- Firebase Firestore
+- Zustand 4.4.1 (State Management)
+
+### Build & Development
+- Vite 4.4.5
+- Node.js >= 16.0.0
+
+## Quick Start
 
 ### Prerequisites
-1. Create a Firebase project at [Firebase Console](https://console.firebase.google.com/)
-2. Enable Google Authentication
-3. Enable Firestore Database
+1. Node.js >= 16.0.0
+2. Firebase project with:
+   - Authentication enabled (Google provider)
+   - Firestore database initialized
+   - Web app configuration
 
-### Environment Setup
-Create a `.env` file in the root directory with your Firebase configuration:
+### Installation
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+```
+
+### Environment Configuration
+Create `.env` file in project root:
 ```env
 VITE_FIREBASE_API_KEY=your_api_key
 VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
@@ -46,59 +76,68 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
 ```
 
-### Installation
-1. Install dependencies:
-```bash
-npm install
-```
+## Usage Guide
 
-2. Run development server:
-```bash
-npm run dev
-```
-
-3. Build for production:
-```bash
-npm run build
-```
-
-## Usage
-1. Sign in with your Google account
-2. Add websites using the "Add Website" button
-3. Organize websites with tags
-4. Use the search bar to quickly find websites
-5. Press Alt to cycle through results and Enter to open
-6. Create groups to organize related websites
-7. Right-click for additional options
-
-## Features in Detail
+### Keyboard Navigation
+| Key Combination | Action |
+|----------------|---------|
+| Alt | Cycle through websites |
+| Enter | Open selected website |
+| / | Focus search bar |
+| Esc | Clear search/Close modals |
 
 ### Website Management
-- Add, edit, and delete websites
-- Import from browser history
-- Automatic favicon fetching
-- Visit tracking
+1. Add websites:
+   - Click "Add Website" button
+   - Enter URL and details
+   - Assign tags for organization
 
-### Organization
-- Tag-based filtering
-- Group creation and management
-- Drag and drop organization
-- Context menus for quick actions
+2. Organization:
+   - Create groups for related websites
+   - Use tags for flexible categorization
+   - Right-click for context menu options
 
-### Search and Navigation
-- Full-text search across titles and URLs
-- Tag-based filtering with @ symbol
-- Keyboard shortcuts for power users
-- Quick actions via command palette
+3. Search and Filter:
+   - Type to search across all fields
+   - Use @ to filter by tags
+   - Press Alt to cycle through results
 
-### Synchronization
-- Real-time sync across browsers
-- Automatic backup to Firestore
-- User-specific data isolation
-- Offline support with local storage
+## Firebase Setup
 
-## Contributing
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+### Authentication
+1. Firebase Console → Authentication → Sign-in methods
+2. Enable Google Authentication
+3. Add authorized domains
+
+### Firestore Rules
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
+
+## Development
+
+### Project Structure
+```
+src/
+├── components/       # React components
+├── store/           # Zustand store
+├── config/          # Firebase configuration
+├── utils/           # Utility functions
+└── assets/          # Static assets
+```
+
+### Key Components
+- `App.tsx`: Main application component
+- `WebsiteGrid.tsx`: Website display grid
+- `GroupSection.tsx`: Group management
+- `websiteStore.ts`: State management
 
 ## License
-[MIT](https://choosealicense.com/licenses/mit/)
+MIT License - see LICENSE file for details
