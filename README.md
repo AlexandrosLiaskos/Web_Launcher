@@ -2,7 +2,8 @@
 
 <div align="center">
 
-![Web Launcher Logo](public/vite.svg)
+![image](https://github.com/user-attachments/assets/eb7f704d-f115-4590-a0a5-a016e316da51)
+
 
 [![Deploy to GitHub Pages](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml/badge.svg)](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -12,59 +13,77 @@
 
 </div>
 
-## Overview
+# Web Launcher
 
-Web Launcher is a sophisticated web application management platform that revolutionizes how professionals organize and access their digital workspace. With its elegant interface and powerful features, it transforms the traditional bookmark experience into a streamlined, efficient workflow solution.
+An advanced web application designed to help you organize and quickly access websites from a central dashboard.
 
-### 🌟 Key Features
+## Features
 
-#### Intelligent Website Management
-- **Smart Organization**: Intuitive group-based website categorization
-- **Dynamic Search**: Lightning-fast, context-aware search functionality
-- **Visit Analytics**: Advanced tracking of website access patterns
-- **Automated Favicon Integration**: Automatic visual identity management
+### Command Mode
+- Activate with `Shift + :` or type `>`
+- Commands for managing websites:
+  - Add new websites
+  - Edit existing entries
+  - Delete websites
+  - Import sites from browser
+  - Switch views
+  - Access settings
 
-#### Seamless User Experience
-- **Aurora Interface**: Stunning visual design with dynamic aurora effects
-- **Keyboard-First Navigation**: Professional-grade keyboard shortcuts
-- **Multi-Device Sync**: Real-time synchronization across all devices
-- **Responsive Design**: Flawless experience across all screen sizes
+### Search and Navigation
+- Fuzzy search through titles, URLs, descriptions, and categories
+- Tag-based search using `@` prefix
+- Real-time filtering as you type
+- Keyboard-first navigation:
+  - `Alt` to cycle through sites
+  - `Enter` to open selected site
+  - Arrow keys for movement
+  - `Esc` to clear/close search
+  - `/` to focus search
+  - Custom keyboard shortcuts
 
-#### Enterprise-Grade Security
-- **Google Authentication**: Secure single sign-on capabilities
-- **Data Isolation**: Complete separation of user data
-- **Real-time Backup**: Automatic cloud synchronization
-- **Role-Based Access**: Granular permission controls
+### Website Management
+- Organize websites with tags and categories
+- Add detailed descriptions
+- Automatic favicon fetching
+- Right-click context menu for quick actions
+- Bulk import from browser history/bookmarks
+- Preview generation
 
-## 🚀 Getting Started
+### User Interface
+- Multiple view options:
+  - Grid view
+  - List view
+  - Group/folder view
+- Responsive design for all screen sizes
+- Aurora background effects
+- Dark/light theme support
 
-### Prerequisites
+### Data Management
+- Google authentication for secure sign-in
+- Real-time data synchronization via Firebase
+- Offline support
+- Multi-device synchronization
+- Automatic data backup
+- Data export/import capabilities
 
-- Node.js ≥ 16.0.0
-- npm or yarn package manager
-- Google Cloud Platform account for authentication
-- Modern web browser
+### Browser Integration
+- Chrome extension support
+- Firefox extension support
+- Import from browser history
+- Import from bookmarks
 
-### Quick Installation
+## Setup
 
+1. Install Node.js 16+
+2. Clone and install:
 ```bash
-# Clone the repository
 git clone https://github.com/yourusername/Web_Launcher.git
-
-# Navigate to project directory
 cd Web_Launcher
-
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
 ```
 
-### Environment Configuration
-
-Create `.env` file with the following configuration:
-
+3. Create `.env` with your Firebase keys:
 ```env
 VITE_FIREBASE_API_KEY=your_api_key
 VITE_FIREBASE_AUTH_DOMAIN=your_domain
@@ -74,61 +93,27 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
 ```
 
-## 💻 Professional Usage Guide
+## Keyboard Shortcuts
 
-### Keyboard Navigation Excellence
+| Key | Action |
+|-----|--------|
+| `Shift + :` | Enter command mode |
+| `>` | Enter command mode |
+| `Alt` | Switch between sites |
+| `Enter` | Open selected site |
+| `/` | Focus search |
+| `Esc` | Close/clear current action |
+| `←↑↓→` | Navigate through sites |
 
-| Command | Action | Context |
-|---------|--------|---------|
-| `Alt` | Cycle Websites | Global |
-| `Enter` | Launch Selected | Selection |
-| `/` | Quick Search | Global |
-| `Esc` | Clear/Close | Modal/Search |
+## Tech Stack
 
-### Website Management
-
-#### Organization
-- Create logical groups for related websites
-- Apply tags for cross-sectional categorization
-- Utilize smart sorting based on usage patterns
-
-#### Optimization
-- Monitor visit frequencies for insights
-- Customize launch preferences
-- Configure group-specific settings
-
-## 🛠 Technical Architecture
-
-### Technology Stack
-
-#### Frontend Framework
-- **React 18.2.0**: Enterprise-grade UI development
-- **TypeScript 5.0.2**: Type-safe code architecture
-- **Tailwind CSS 3.3.3**: Professional styling system
-
-#### State Management
-- **Zustand 4.4.1**: Efficient state orchestration
-- **Firebase Realtime**: Cloud data synchronization
-
-#### Build & Development
-- **Vite 4.4.5**: Next-generation build tooling
-- **ESLint**: Code quality assurance
-- **GitHub Actions**: Automated deployment
-
-### Security Implementation
-
-```javascript
-// Firestore Security Rules
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && 
-                          request.auth.uid == userId;
-    }
-  }
-}
-```
+- React 18.2.0 + TypeScript 5.0.2
+- Firebase for authentication and storage
+- Zustand for state management
+- Vite 4.4.5 for building
+- Tailwind CSS for styling
+- React Router for navigation
+- React Query for data fetching
 
 ## 📈 Performance Metrics
 
@@ -136,20 +121,6 @@ service cloud.firestore {
 - **Time to Interactive**: < 2s
 - **Lighthouse Score**: 90+ across all metrics
 - **Offline Capability**: Full functionality maintained
-
-## 🤝 Enterprise Support
-
-### Professional Services
-- Technical implementation support
-- Custom deployment configurations
-- Integration consulting
-- Performance optimization
-
-### Documentation
-- Comprehensive API documentation
-- Integration guides
-- Best practices
-- Security recommendations
 
 ## 📄 License
 
