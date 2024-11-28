@@ -108,6 +108,6 @@ Web Launcher is [MIT licensed](LICENSE).
 
 ### Show your support! ⭐
 
-[Star this repo](https://github.com/yourusername/Web_Launcher) if you found it helpful!
+[Star this repo](https://github.com/AlexandrosLiaskos/Web_Launcher) if you found it helpful!
 
 </div>
