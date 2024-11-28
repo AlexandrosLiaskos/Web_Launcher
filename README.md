@@ -41,7 +41,7 @@
 - Automatic backups
 - Cross-device accessibility
 
-## ⚡ Quick Start
+## ⚡ Local Development
 
 1. **Prerequisites**
    ```bash
