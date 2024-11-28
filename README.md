@@ -29,7 +29,6 @@
 ### ☁️ Seamless Sync
 - Google authentication
 - Real-time Firebase synchronization
-- Offline support
 - Automatic backups
 - Cross-device accessibility
 
