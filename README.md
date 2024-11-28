@@ -22,12 +22,29 @@ A modern, minimalistic website launcher inspired by PowerToys Run with intellige
 npm install
 ```
 
-2. Run development server:
+2. Install the browser extension:
+   - For Chrome:
+     1. Go to `chrome://extensions/`
+     2. Enable "Developer mode"
+     3. Click "Load unpacked"
+     4. Select the `extension` folder from this project
+   - For Firefox:
+     1. Go to `about:debugging#/runtime/this-firefox`
+     2. Click "Load Temporary Add-on"
+     3. Select any file from the `extension-firefox` folder
+
+3. Run development server:
 ```bash
 npm run dev
 ```
 
-3. Build for production:
+4. Build for production:
 ```bash
 npm run build
 ```
+
+## Usage
+- Press `>` to open the command palette
+- Type `import` to import your frequently visited sites from the browser
+- Use the search bar to quickly find and launch websites
+- Visit counts and last visited dates are synced with your browser's history

@@ -10,12 +10,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@firebase/app": "^0.10.16",
+    "@firebase/auth": "^1.8.1",
+    "@heroicons/react": "^2.0.18",
+    "clsx": "^2.1.1",
+    "firebase": "^11.0.2",
+    "framer-motion": "^11.11.17",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "zustand": "^4.4.7",
-    "@heroicons/react": "^2.0.18",
-    "clsx": "^2.0.0",
-    "tailwind-merge": "^2.1.0"
+    "tailwind-merge": "^2.5.5",
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

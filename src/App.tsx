@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
-import { useWebsiteStore } from './store/websiteStore'
+import { useWebsiteStore, type Website } from './store/websiteStore'
 import { WebsiteGrid } from './components/WebsiteGrid'
 import { MagnifyingGlassIcon, PlusIcon, PencilSquareIcon, ArrowDownTrayIcon, XMarkIcon, CheckIcon, ExclamationTriangleIcon, TrashIcon } from '@heroicons/react/24/solid'
+import { generatePreview } from './utils/preview'
+import { AuroraBackground } from './components/ui/AuroraBackground';
+import { UserAuth } from './components/UserAuth';
+import { auth } from './config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import React from 'react'
 
 type CommandType = 'search' | 'add' | 'edit' | 'delete' | 'import'
 
@@ -11,20 +17,6 @@ interface Command {
   text: string
   shortcut?: string
   keywords: string[]
-}
-
-interface Website {
-  id: string
-  title: string
-  url: string
-  description?: string
-  tags?: string[]
-  category?: string
-  favicon?: string
-  preview?: string
-  frecency: number
-  visits: number
-  lastVisited: number
 }
 
 interface BrowserSite {
@@ -74,10 +66,21 @@ const DEFAULT_WEBSITE: Partial<Website> = {
   category: '',
 }
 
+// Keyboard shortcut constants
+const SHORTCUTS = {
+  SEARCH_KEY: '/',
+  COMMAND_KEY: ':',
+  ESCAPE: 'Escape',
+  ENTER: 'Enter',
+  UP: 'ArrowUp',
+  DOWN: 'ArrowDown',
+} as const;
+
 function App() {
-  const { websites, addWebsite, updateWebsite, removeWebsite } = useWebsiteStore()
+  const { websites, loadWebsites, addWebsite, editWebsite: updateWebsite, removeWebsite } = useWebsiteStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchActive, setIsSearchActive] = useState(false)
+  const [isCommandMode, setIsCommandMode] = useState(false)
   const [selectedCommand, setSelectedCommand] = useState<CommandType>('search')
   const [selectedWebsite, setSelectedWebsite] = useState<Website | null>(null)
   const [showModal, setShowModal] = useState(false)
@@ -88,6 +91,57 @@ function App() {
   const [importLoading, setImportLoading] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Reset states
+  const resetStates = (maintainEditMode = false) => {
+    setSearchQuery('');
+    setIsSearchActive(false);
+    setIsCommandMode(false);
+    setSelectedCommandIndex(0);
+    setShowModal(false);
+    setShowImportModal(false);
+    if (!maintainEditMode) {
+      setSelectedCommand('search');
+    }
+    document.activeElement instanceof HTMLElement && document.activeElement.blur();
+  };
+
+  // Activate search mode
+  const activateSearch = () => {
+    setIsSearchActive(true);
+    setIsCommandMode(false);
+    setSearchQuery('');
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  };
+
+  // Activate command mode
+  const activateCommandMode = () => {
+    setIsCommandMode(true);
+    setIsSearchActive(true);
+    setSearchQuery('>');
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(1, 1);
+    });
+  };
+
+  // Initialize websites when component mounts
+  useEffect(() => {
+    loadWebsites()
+  }, [])
+
+  // Filter websites based on search query
+  const filteredWebsites = searchQuery.trim() === '' 
+    ? websites 
+    : websites.filter(website => 
+        website.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        website.url.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        website.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        website.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        website.category?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
 
   // Filter commands based on search
   const getFilteredCommands = () => {
@@ -119,81 +173,161 @@ function App() {
   // Handle keyboard shortcuts and navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't handle shortcuts if we're typing in an input field other than search
-      if (e.target instanceof HTMLInputElement && e.target !== inputRef.current) {
-        return
-      }
+      // Don't trigger shortcuts if we're in a modal
+      if (showModal || showImportModal) return;
 
-      // Command palette navigation
-      if (searchQuery.startsWith('>') && filteredCommands.length > 0) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault()
-          setSelectedCommandIndex((prev) => 
-            prev < filteredCommands.length - 1 ? prev + 1 : prev
-          )
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault()
-          setSelectedCommandIndex((prev) => prev > 0 ? prev - 1 : prev)
-        } else if (e.key === 'Enter') {
-          e.preventDefault()
-          selectCommand(filteredCommands[selectedCommandIndex])
-        }
-        return
-      }
-
-      // Toggle command palette with Cmd/Ctrl + K or :
+      // Don't trigger shortcuts if we're typing in an input
       if (
-        ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') ||
-        (e.key === ':' && e.target !== inputRef.current)
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement
       ) {
-        e.preventDefault()
-        setIsSearchActive(true)
-        setSearchQuery('>')
-        setSelectedCommand('search')
-        setTimeout(() => {
-          if (inputRef.current) {
-            inputRef.current.focus()
-            inputRef.current.setSelectionRange(1, 1)
+        // But allow Escape to work even in input fields
+        if (e.key === 'Escape') {
+          if (selectedCommand === 'edit') {
+            e.preventDefault();
+            setSelectedCommand('search');
           }
-        }, 0)
-      }
-      // Toggle search with / or Shift+Enter
-      else if (
-        (e.key === '/' && e.target !== inputRef.current) ||
-        (e.key === 'Enter' && e.shiftKey && e.target !== inputRef.current)
-      ) {
-        e.preventDefault()
-        setIsSearchActive(true)
-        setSelectedCommand('search')
-        setSearchQuery('')
-        setTimeout(() => inputRef.current?.focus(), 0)
-      }
-      // Clear search with Escape
-      else if (e.key === 'Escape') {
-        e.preventDefault()
-        if (showModal) {
-          setShowModal(false)
-          setEditingWebsite(DEFAULT_WEBSITE)
-        } else if (showImportModal) {
-          setShowImportModal(false)
-          setBrowserSites([])
-        } else {
-          setSearchQuery('')
-          setIsSearchActive(false)
-          setSelectedCommand('search')
-          inputRef.current?.blur()
+          resetStates();
         }
+        return;
+      }
+
+      // Handle global shortcuts
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (selectedCommand === 'edit') {
+          setSelectedCommand('search');
+        }
+        resetStates();
+      } else if (e.key === '/' && !isCommandMode) {
+        e.preventDefault();
+        activateSearch();
+      } else if (e.shiftKey && e.key === ':') {
+        e.preventDefault();
+        activateCommandMode();
+      }
+
+      // Handle forward slash for search
+      if (e.key === SHORTCUTS.SEARCH_KEY && 
+          !e.ctrlKey && 
+          !e.metaKey && 
+          !e.altKey && 
+          !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        activateSearch();
+        return;
+      }
+
+      // Handle Shift + : for command mode
+      if (e.key === SHORTCUTS.COMMAND_KEY && 
+          !e.ctrlKey && 
+          !e.metaKey && 
+          !e.altKey && 
+          e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        activateCommandMode();
+        return;
+      }
+
+      // Handle arrow navigation in command mode
+      if (isCommandMode && filteredCommands.length > 0) {
+        switch (e.key) {
+          case SHORTCUTS.UP:
+            e.preventDefault();
+            setSelectedCommandIndex(prev => 
+              prev > 0 ? prev - 1 : filteredCommands.length - 1
+            );
+            break;
+          case SHORTCUTS.DOWN:
+            e.preventDefault();
+            setSelectedCommandIndex(prev => 
+              prev < filteredCommands.length - 1 ? prev + 1 : 0
+            );
+            break;
+          case SHORTCUTS.ENTER:
+            if (!e.shiftKey) {
+              e.preventDefault();
+              const selectedCommand = filteredCommands[selectedCommandIndex];
+              if (selectedCommand) {
+                selectCommand(selectedCommand);
+              }
+            }
+            break;
+        }
+      }
+    };
+
+    // Use capture phase to handle shortcuts before other handlers
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [isSearchActive, isCommandMode, filteredCommands, selectedCommandIndex, showModal, showImportModal]);
+
+  // Keep selected command in view
+  useEffect(() => {
+    if (isCommandMode && filteredCommands.length > 0) {
+      const commandElement = document.querySelector(`[data-command-index="${selectedCommandIndex}"]`);
+      if (commandElement) {
+        commandElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }
+  }, [selectedCommandIndex, isCommandMode, filteredCommands.length]);
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isSearchActive, searchQuery, filteredCommands, selectedCommandIndex, showModal, showImportModal])
+  // Handle search input changes
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // If the user manually types '/', ignore it
+    if (value === SHORTCUTS.SEARCH_KEY) {
+      return;
+    }
+    
+    setSearchQuery(value);
+    
+    // Enter command mode if '>' is typed
+    if (value.startsWith('>')) {
+      setIsCommandMode(true);
+      setSelectedCommandIndex(0);
+    } else {
+      setIsCommandMode(false);
+    }
+  };
 
-  // Reset command index when filtered commands change
-  useEffect(() => {
-    setSelectedCommandIndex(0)
-  }, [searchQuery])
+  // Handle input-specific keyboard events
+  const handleSearchInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === SHORTCUTS.ESCAPE) {
+      e.preventDefault();
+      e.stopPropagation();
+      resetStates();
+    } else if (e.shiftKey && e.key === SHORTCUTS.COMMAND_KEY) {
+      e.preventDefault();
+      e.stopPropagation();
+      activateCommandMode();
+    } else if (isCommandMode && filteredCommands.length > 0) {
+      switch (e.key) {
+        case SHORTCUTS.UP:
+          e.preventDefault();
+          setSelectedCommandIndex(prev => 
+            prev > 0 ? prev - 1 : filteredCommands.length - 1
+          );
+          break;
+        case SHORTCUTS.DOWN:
+          e.preventDefault();
+          setSelectedCommandIndex(prev => 
+            prev < filteredCommands.length - 1 ? prev + 1 : 0
+          );
+          break;
+        case SHORTCUTS.ENTER:
+          e.preventDefault();
+          const selectedCommand = filteredCommands[selectedCommandIndex];
+          if (selectedCommand) {
+            selectCommand(selectedCommand);
+          }
+          break;
+      }
+    }
+  };
 
   // Handle website selection
   const handleWebsiteSelect = (website: Website) => {
@@ -212,30 +346,49 @@ function App() {
   }
 
   // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingWebsite.title || !editingWebsite.url) return
 
-    if (editingWebsite.id) {
-      updateWebsite(editingWebsite as Website)
-    } else {
-      addWebsite({
-        ...editingWebsite,
-        id: crypto.randomUUID(),
-        frecency: 0,
-        visits: 0,
-        lastVisited: Date.now(),
-      } as Website)
-    }
+    try {
+      // Generate preview for the website
+      const preview = await generatePreview(editingWebsite.url);
 
-    setShowModal(false)
-    setEditingWebsite(DEFAULT_WEBSITE)
-    setSelectedCommand('search')
+      if (editingWebsite.id) {
+        // Editing existing website
+        const updatedWebsite = {
+          ...editingWebsite,
+          preview: preview || editingWebsite.preview, // Keep old preview if generation fails
+          url: editingWebsite.url.trim(),
+          title: editingWebsite.title.trim(),
+          tags: editingWebsite.tags?.map(tag => tag.trim()).filter(Boolean) || [],
+        };
+        updateWebsite(editingWebsite.id, updatedWebsite);
+      } else {
+        // Adding new website
+        const newWebsite = {
+          ...editingWebsite,
+          preview,
+          userId: auth.currentUser?.uid || '',
+          tags: editingWebsite.tags || [],
+        };
+        addWebsite(newWebsite);
+      }
+
+      setShowModal(false)
+      setEditingWebsite(DEFAULT_WEBSITE)
+      setSelectedCommand('search')
+    } catch (error) {
+      console.error('Error saving website:', error);
+    }
   }
 
   // Fuzzy search implementation
   const fzfSearch = (query: string) => {
-    if (!query || query.startsWith('>')) return websites
+    if (!query || query.startsWith('>')) {
+      // When no search query, sort by total visits
+      return [...websites].sort((a, b) => b.totalVisits - a.totalVisits)
+    }
 
     const terms = query.toLowerCase().split(' ').filter(Boolean)
     
@@ -274,8 +427,8 @@ function App() {
         // Website only matches if all terms have a score
         if (scores.some(score => score === 0)) return null
 
-        // Final score is the sum of all term scores plus frecency bonus
-        const matchScore = scores.reduce((a, b) => a + b, 0) + (website.frecency / 100)
+        // Final score is the sum of all term scores plus visit count bonus
+        const matchScore = scores.reduce((a, b) => a + b, 0) + (website.totalVisits * 0.1)
 
         return { website, matchScore }
       })
@@ -359,6 +512,12 @@ function App() {
 
   const handleImportSelected = () => {
     const selectedSites = browserSites.filter(site => site.selected)
+    const currentUser = auth.currentUser;
+    
+    if (!currentUser) {
+      setImportError('You must be logged in to import websites');
+      return;
+    }
     
     // Create a map of existing URLs for duplicate checking
     const existingUrls = new Set(websites.map(site => site.url))
@@ -370,11 +529,12 @@ function App() {
       addWebsite({
         title: site.title,
         url: site.url,
-        frecency: site.visitCount,
-        visits: site.visitCount,
-        lastVisited: site.lastVisit,
+        description: '',
         tags: [],
-      })
+        category: '',
+        preview: undefined,
+        userId: currentUser.uid,
+      });
     })
 
     setShowImportModal(false)
@@ -395,324 +555,363 @@ function App() {
     setShowModal(true)
   }
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // User is signed in, see docs for a list of available properties
+        // https://firebase.google.com/docs/reference/js/firebase.User
+        const uid = user.uid;
+        // ...
+      } else {
+        // User is signed out
+        // ...
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Handle modal close
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditingWebsite(null);
+    // Maintain edit mode by passing true to resetStates
+    resetStates(selectedCommand === 'edit');
+  };
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts if we're typing in an input
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        // But allow Escape to work even in input fields
+        if (e.key === 'Escape') {
+          if (showModal) {
+            e.preventDefault();
+            handleCloseModal();
+          } else if (selectedCommand === 'edit') {
+            e.preventDefault();
+            setSelectedCommand('search');
+            resetStates();
+          }
+        }
+        return;
+      }
+
+      // Handle global shortcuts
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (showModal) {
+          handleCloseModal();
+        } else if (selectedCommand === 'edit') {
+          setSelectedCommand('search');
+          resetStates();
+        } else {
+          resetStates();
+        }
+      } else if (e.key === '/' && !isCommandMode && selectedCommand !== 'edit') {
+        e.preventDefault();
+        activateSearch();
+      } else if (e.shiftKey && e.key === ':' && selectedCommand !== 'edit') {
+        e.preventDefault();
+        activateCommandMode();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCommandMode, showModal, showImportModal, selectedCommand]);
+
   return (
-    <div className="min-h-screen bg-gray-900">
-      {/* Fixed Search Bar */}
-      <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800 shadow-lg">
-        <div className="container mx-auto px-6 py-4">
-          <div className="max-w-2xl mx-auto">
+    <AuroraBackground>
+      <div className="min-h-screen">
+        {/* Top Bar with Search and User Info */}
+        <div className="sticky top-0 z-30 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800 shadow-lg">
+          <div className="container mx-auto px-6 py-4">
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-xl font-semibold">Web Launcher</h1>
+              <UserAuth />
+            </div>
             <div className="relative">
               <input
                 ref={inputRef}
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full bg-gray-800 text-white px-4 py-3 pl-12 rounded-lg shadow-lg border border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none text-lg transition-all duration-200 ${
-                  isSearchActive ? 'opacity-100' : 'opacity-50'
-                }`}
-                placeholder={
-                  selectedCommand === 'search' 
-                    ? "Type to search (Shift+Enter, /), commands (⌘K, :)..." 
-                    : selectedCommand === 'add'
-                    ? "Enter website details..."
-                    : selectedCommand === 'edit'
-                    ? "Click a website to edit..."
-                    : selectedCommand === 'delete'
-                    ? "Click a website to delete..."
-                    : "Select a website..."
-                }
+                onChange={handleSearchInputChange}
+                onKeyDown={handleSearchInputKeyDown}
+                placeholder={isCommandMode ? 'Type a command...' : 'Press / to search, Shift+: for commands'}
+                className="w-full bg-gray-800 text-white px-4 py-3 pl-12 rounded-lg shadow-lg border border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none text-lg"
               />
               <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              
-              {/* Mode Indicator */}
-              {selectedCommand !== 'search' && (
-                <div className={`absolute right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium
-                  ${selectedCommand === 'edit' ? 'bg-yellow-500/20 text-yellow-500' :
-                    selectedCommand === 'delete' ? 'bg-red-500/20 text-red-500' :
-                    selectedCommand === 'add' ? 'bg-green-500/20 text-green-500' :
-                    'bg-blue-500/20 text-blue-500'}`}>
-                  {selectedCommand.charAt(0).toUpperCase() + selectedCommand.slice(1)} Mode
-                </div>
-              )}
-              
-              {/* Command Palette */}
-              {searchQuery.startsWith('>') && filteredCommands.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 rounded-lg border border-gray-700 shadow-lg overflow-hidden">
-                  {filteredCommands.map((command, index) => (
-                    <button
-                      key={command.type}
-                      onClick={() => selectCommand(command)}
-                      onMouseEnter={() => setSelectedCommandIndex(index)}
-                      className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-700 transition-colors ${
-                        index === selectedCommandIndex ? 'bg-gray-700' : ''
-                      }`}
-                    >
-                      <command.icon className="w-5 h-5 text-gray-400" />
-                      <span className="flex-1 text-left text-white">{command.text}</span>
-                      {command.shortcut && (
-                        <span className="text-sm text-gray-500">{command.shortcut}</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center space-x-2 text-gray-400">
+                <kbd className="px-2 py-1 text-xs bg-gray-700 rounded">
+                  {isCommandMode ? 'Shift + :' : '/'}
+                </kbd>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-6 py-8">
-        <WebsiteGrid 
-          websites={fzfSearch(searchQuery)} 
-          onSelect={handleWebsiteSelect}
-          mode={selectedCommand === 'search' ? 'normal' : selectedCommand}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-        />
-      </div>
+        {/* Main Content */}
+        <main className="container mx-auto px-6 py-8">
+          <WebsiteGrid 
+            websites={filteredWebsites}
+            onSelect={handleWebsiteSelect}
+            mode={selectedCommand === 'search' ? 'normal' : selectedCommand}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+        </main>
 
-      {/* Import Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-20">
-          <div className="bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full p-6 max-h-[80vh] flex flex-col">
-            <h2 className="text-lg font-medium text-white mb-4">
-              Import from Browser
-            </h2>
-            <p className="text-gray-400 max-w-md mb-4">
-              This feature requires the Web Launcher browser extension. Please follow these steps:
-            </p>
-            {importError ? (
-              <div className="bg-red-900/50 border border-red-500/50 rounded-lg p-4 mb-4">
-                <p className="text-red-400">{importError}</p>
-                <div className="mt-4">
-                  <h4 className="text-white font-medium mb-2">Installation Instructions:</h4>
-                  <p className="text-gray-400 mb-2">For Firefox:</p>
-                  <ol className="list-decimal list-inside text-gray-400 mb-4 ml-4">
-                    <li>Go to about:debugging</li>
-                    <li>Click "This Firefox"</li>
-                    <li>Click "Load Temporary Add-on"</li>
-                    <li>Select the manifest.json file in the extension-firefox folder</li>
-                  </ol>
-                  <p className="text-gray-400 mb-2">For Chrome/Edge:</p>
-                  <ol className="list-decimal list-inside text-gray-400 ml-4">
-                    <li>Go to chrome://extensions/</li>
-                    <li>Enable "Developer mode"</li>
-                    <li>Click "Load unpacked"</li>
-                    <li>Select the extension folder</li>
-                  </ol>
-                </div>
+        {/* Command Palette */}
+        {isCommandMode && filteredCommands.length > 0 && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-gray-800 rounded-lg shadow-xl max-w-xl w-full overflow-hidden">
+              {/* Search Input */}
+              <div className="p-4 border-b border-gray-700">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={handleSearchInputChange}
+                  onKeyDown={handleSearchInputKeyDown}
+                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Type a command..."
+                />
               </div>
-            ) : (
-              <p className="text-gray-400 max-w-md">
-                Select the sites you want to import from your browser history and bookmarks.
-              </p>
-            )}
-            {importLoading ? (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+
+              {/* Commands List */}
+              <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+                {filteredCommands.map((command, index) => (
+                  <button
+                    key={command.type}
+                    data-command-index={index}
+                    onClick={() => selectCommand(command)}
+                    onMouseEnter={() => setSelectedCommandIndex(index)}
+                    className={`w-full px-4 py-3 flex items-center space-x-3 hover:bg-gray-700 transition-colors ${
+                      index === selectedCommandIndex ? 'bg-gray-700' : ''
+                    }`}
+                    role="option"
+                    aria-selected={index === selectedCommandIndex}
+                  >
+                    <command.icon className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                    <span className="flex-1 text-left truncate">{command.text}</span>
+                    {command.shortcut && (
+                      <kbd className="px-2 py-1 text-xs bg-gray-900 rounded text-gray-400 flex-shrink-0 ml-2">
+                        {command.shortcut}
+                      </kbd>
+                    )}
+                  </button>
+                ))}
               </div>
-            ) : browserSites.length > 0 ? (
-              <>
-                <div className="mb-4 flex items-center justify-between">
-                  <p className="text-gray-300">
-                    Select the websites you want to import:
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setBrowserSites(sites => 
-                        sites.map(site => ({ ...site, selected: true }))
-                      )}
-                      className="px-3 py-1 text-sm text-gray-300 hover:text-white"
-                    >
-                      Select All
-                    </button>
-                    <button
-                      onClick={() => setBrowserSites(sites => 
-                        sites.map(site => ({ ...site, selected: false }))
-                      )}
-                      className="px-3 py-1 text-sm text-gray-300 hover:text-white"
-                    >
-                      Clear All
-                    </button>
+
+              {/* Quick Help */}
+              <div className="px-4 py-2 bg-gray-900/50 border-t border-gray-700">
+                <div className="flex items-center justify-between text-sm text-gray-400">
+                  <div className="flex items-center space-x-4">
+                    <span className="flex items-center space-x-1">
+                      <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-xs">↑↓</kbd>
+                      <span>Navigate</span>
+                    </span>
+                    <span className="flex items-center space-x-1">
+                      <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-xs">Enter</kbd>
+                      <span>Select</span>
+                    </span>
+                    <span className="flex items-center space-x-1">
+                      <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-xs">Esc</kbd>
+                      <span>Cancel</span>
+                    </span>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-                <div className="flex-1 overflow-y-auto">
-                  <div className="grid gap-2">
-                    {browserSites.map((site) => (
+        {/* Add/Edit Modal */}
+        {showModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-gray-800 rounded-lg shadow-xl max-w-lg w-full">
+              <div className="p-6">
+                <h2 className="text-xl font-semibold text-white mb-4">
+                  {editingWebsite ? 'Edit Website' : 'Add Website'}
+                </h2>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSubmit(e);
+                  handleCloseModal();
+                }} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Title</label>
+                    <input
+                      type="text"
+                      value={editingWebsite.title}
+                      onChange={(e) => setEditingWebsite(prev => ({ ...prev, title: e.target.value }))}
+                      className="w-full bg-gray-800/90 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      placeholder="Website Title"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">URL</label>
+                    <input
+                      type="url"
+                      value={editingWebsite.url}
+                      onChange={(e) => setEditingWebsite(prev => ({ ...prev, url: e.target.value }))}
+                      className="w-full bg-gray-800/90 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      placeholder="https://example.com"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
+                    <textarea
+                      value={editingWebsite.description}
+                      onChange={(e) => setEditingWebsite(prev => ({ ...prev, description: e.target.value }))}
+                      className="w-full bg-gray-800/90 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      placeholder="Website description..."
+                      rows={3}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Tags (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={editingWebsite.tags?.join(', ') || ''}
+                      onChange={(e) => setEditingWebsite(prev => ({ 
+                        ...prev, 
+                        tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
+                      }))}
+                      className="w-full bg-gray-800/90 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      placeholder="development, tools, productivity"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
+                    <input
+                      type="text"
+                      value={editingWebsite.category}
+                      onChange={(e) => setEditingWebsite(prev => ({ ...prev, category: e.target.value }))}
+                      className="w-full bg-gray-800/90 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      placeholder="Category"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={handleCloseModal}
+                      className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700 rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {editingWebsite ? 'Save Changes' : 'Add Website'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Import Modal */}
+        {showImportModal && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+              <div className="p-6 flex-shrink-0 border-b border-gray-700">
+                <h2 className="text-xl font-semibold text-white">Import from Browser</h2>
+              </div>
+              
+              <div className="p-6 overflow-y-auto flex-grow">
+                {importError && (
+                  <div className="mb-4 p-4 bg-red-900/50 text-red-200 rounded-lg flex items-center gap-2">
+                    <ExclamationTriangleIcon className="w-5 h-5" />
+                    <span>{importError}</span>
+                  </div>
+                )}
+                
+                {browserSites.length > 0 ? (
+                  <div className="space-y-4">
+                    {browserSites.map((site, index) => (
                       <div
-                        key={site.url}
-                        className={`p-3 rounded-lg border ${
-                          site.selected 
-                            ? 'bg-gray-700 border-blue-500' 
-                            : 'bg-gray-800 border-gray-700'
-                        } cursor-pointer`}
+                        key={index}
+                        className={`p-4 rounded-lg border ${
+                          site.selected
+                            ? 'border-blue-500 bg-blue-500/20'
+                            : 'border-gray-700 hover:border-gray-600'
+                        } cursor-pointer transition-colors`}
                         onClick={() => setBrowserSites(sites =>
-                          sites.map(s =>
-                            s.url === site.url 
-                              ? { ...s, selected: !s.selected }
-                              : s
+                          sites.map((s, i) =>
+                            i === index ? { ...s, selected: !s.selected } : s
                           )
                         )}
                       >
-                        <div className="flex items-start gap-3">
-                          <div className="pt-0.5">
-                            <div className={`w-5 h-5 rounded border ${
-                              site.selected
-                                ? 'bg-blue-500 border-blue-500'
-                                : 'border-gray-500'
-                            } flex items-center justify-center`}>
-                              {site.selected && (
-                                <CheckIcon className="w-4 h-4 text-white" />
-                              )}
-                            </div>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-5 h-5 rounded border ${
+                            site.selected ? 'bg-blue-500 border-blue-500' : 'border-gray-600'
+                          } flex items-center justify-center`}>
+                            {site.selected && <CheckIcon className="w-4 h-4 text-white" />}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-white font-medium truncate">
-                              {site.title}
-                            </h3>
-                            <p className="text-sm text-gray-400 truncate">
-                              {site.url}
-                            </p>
-                            <div className="flex gap-4 mt-1 text-sm text-gray-500">
-                              <span>{site.visitCount} visits</span>
-                              <span>Last: {new Date(site.lastVisit).toLocaleDateString()}</span>
-                            </div>
+                          <div className="flex-grow min-w-0">
+                            <h3 className="font-medium text-white truncate">{site.title || site.url}</h3>
+                            <p className="text-sm text-gray-400 truncate">{site.url}</p>
+                          </div>
+                          <div className="text-right text-sm text-gray-500">
+                            <div>Visits: {site.visitCount}</div>
+                            <div>Last: {new Date(site.lastVisit).toLocaleDateString()}</div>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
-
-                <div className="mt-4 flex justify-end gap-3">
-                  <button
-                    onClick={() => setShowImportModal(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700 rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleImportSelected}
-                    disabled={!browserSites.some(site => site.selected)}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Import Selected
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-                <ExclamationTriangleIcon className="w-16 h-16 text-gray-600 mb-4" />
-                <h3 className="text-lg font-medium text-white mb-2">
-                  Couldn't access browser history
-                </h3>
-                <p className="text-gray-400 max-w-md">
-                  This feature requires browser permissions to access your history.
-                  Please make sure you're using a supported browser and have granted the necessary permissions.
-                </p>
-                {importError && (
-                  <p className="text-red-500 mt-4">{importError}</p>
+                ) : (
+                  <div className="text-center py-12 text-gray-400">
+                    {importLoading ? (
+                      <div className="flex items-center justify-center gap-3">
+                        <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                        <span>Loading browser data...</span>
+                      </div>
+                    ) : (
+                      'No browser data available'
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Add/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-20">
-          <div className="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full p-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <h2 className="text-xl font-semibold text-white mb-4">
-                {editingWebsite.id ? 'Edit Website' : 'Add New Website'}
-              </h2>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Title</label>
-                <input
-                  type="text"
-                  value={editingWebsite.title}
-                  onChange={(e) => setEditingWebsite(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="Website Title"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">URL</label>
-                <input
-                  type="url"
-                  value={editingWebsite.url}
-                  onChange={(e) => setEditingWebsite(prev => ({ ...prev, url: e.target.value }))}
-                  className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="https://example.com"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
-                <textarea
-                  value={editingWebsite.description}
-                  onChange={(e) => setEditingWebsite(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="Website description..."
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Tags (comma-separated)</label>
-                <input
-                  type="text"
-                  value={editingWebsite.tags?.join(', ') || ''}
-                  onChange={(e) => setEditingWebsite(prev => ({ 
-                    ...prev, 
-                    tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
-                  }))}
-                  className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="development, tools, productivity"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
-                <input
-                  type="text"
-                  value={editingWebsite.category}
-                  onChange={(e) => setEditingWebsite(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="Category"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
+              <div className="p-6 flex-shrink-0 border-t border-gray-700 flex justify-between">
                 <button
-                  type="button"
+                  className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
                   onClick={() => {
-                    setShowModal(false)
-                    setEditingWebsite(DEFAULT_WEBSITE)
+                    setShowImportModal(false);
+                    setBrowserSites([]);
                   }}
-                  className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700 rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
                   Cancel
                 </button>
                 <button
-                  type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleImportSelected}
+                  disabled={!browserSites.some(site => site.selected)}
                 >
-                  {editingWebsite.id ? 'Save Changes' : 'Add Website'}
+                  Import Selected
                 </button>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </AuroraBackground>
   )
 }
 

@@ -1,76 +1,355 @@
-import { useState } from 'react'
+import { FC, useState, useEffect, useRef } from 'react'
 import { Website, useWebsiteStore } from '../store/websiteStore'
 import { GlobeAltIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/solid'
-import { TrashIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
+import { TrashIcon, PencilSquareIcon, ClipboardIcon } from '@heroicons/react/24/outline'
+import { ensureHttps, isValidUrl } from '../utils/url'
+import { getFaviconUrl } from '../utils/preview'
+import React from 'react'
 
 interface WebsiteGridProps {
   websites: Website[]
   onSelect: (website: Website) => void
-  mode?: 'normal' | 'edit' | 'delete'
+  mode: 'normal' | 'edit' | 'delete' | 'search' | 'add' | 'import'
+  onEdit: (website: Website) => void
+  onDelete: (websiteId: string) => void
 }
 
-export function WebsiteGrid({ websites, onSelect, mode = 'normal' }: WebsiteGridProps) {
+interface ContextMenuProps {
+  x: number;
+  y: number;
+  website: Website;
+  onEdit: (website: Website) => void;
+  onDelete: (id: string) => void;
+  onClose: () => void;
+}
+
+const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, website, onEdit, onDelete, onClose }) => {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [onClose]);
+
+  const menuItems = [
+    {
+      label: 'Open in New Tab',
+      icon: ArrowTopRightOnSquareIcon,
+      onClick: () => {
+        window.open(website.url, '_blank');
+        onClose();
+      }
+    },
+    {
+      label: 'Copy URL',
+      icon: ClipboardIcon,
+      onClick: () => {
+        navigator.clipboard.writeText(website.url);
+        onClose();
+      }
+    },
+    {
+      label: 'Edit',
+      icon: PencilSquareIcon,
+      onClick: () => {
+        onEdit(website);
+        onClose();
+      }
+    },
+    {
+      label: 'Delete',
+      icon: TrashIcon,
+      onClick: () => {
+        onDelete(website.id);
+        onClose();
+      },
+      className: 'text-red-400 hover:text-red-300'
+    }
+  ];
+
+  // Adjust position to keep menu in viewport
+  const adjustedPosition = {
+    x: Math.min(x, window.innerWidth - 200),
+    y: Math.min(y, window.innerHeight - menuItems.length * 40)
+  };
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 w-48 bg-gray-800 rounded-lg shadow-xl border border-gray-700 py-1 text-sm"
+      style={{
+        left: adjustedPosition.x,
+        top: adjustedPosition.y
+      }}
+    >
+      {menuItems.map((item, index) => (
+        <button
+          key={item.label}
+          onClick={item.onClick}
+          className={`w-full px-4 py-2 flex items-center space-x-2 hover:bg-gray-700 transition-colors ${
+            item.className || 'text-gray-200 hover:text-white'
+          }`}
+        >
+          <item.icon className="w-4 h-4" />
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
+export const WebsiteGrid: FC<WebsiteGridProps> = ({ websites, onSelect, mode, onEdit, onDelete }) => {
   const { addVisit } = useWebsiteStore()
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; website: Website } | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1)
+  const gridRef = useRef<HTMLDivElement>(null)
+  const isEditMode = mode === 'edit';
+
+  // Close context menu when mode changes
+  useEffect(() => {
+    setContextMenu(null);
+  }, [mode]);
+
+  const handleContextMenu = (e: React.MouseEvent, website: Website) => {
+    e.preventDefault();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      website
+    });
+  };
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (mode === 'edit' && e.key === 'Escape') {
+        setSelectedIndex(-1);
+        return;
+      }
+
+      if (mode !== 'normal' || !gridRef.current) return;
+
+      const cols = window.innerWidth >= 1280 ? 5 : // xl
+                window.innerWidth >= 1024 ? 4 : // lg
+                window.innerWidth >= 768 ? 3 : // md
+                window.innerWidth >= 640 ? 2 : // sm
+                1; // default
+
+      switch (e.key) {
+        case 'ArrowRight':
+          e.preventDefault();
+          setSelectedIndex(prev => 
+            prev < websites.length - 1 ? prev + 1 : prev
+          );
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          setSelectedIndex(prev => 
+            prev > 0 ? prev - 1 : prev
+          );
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedIndex(prev => {
+            const newIndex = prev - cols;
+            return newIndex >= 0 ? newIndex : prev;
+          });
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedIndex(prev => {
+            const newIndex = prev + cols;
+            return newIndex < websites.length ? newIndex : prev;
+          });
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (selectedIndex >= 0 && selectedIndex < websites.length) {
+            const website = websites[selectedIndex];
+            if (mode === 'normal') {
+              handleSelect(website);
+            } else {
+              onSelect(website);
+            }
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mode, selectedIndex, websites, onSelect]);
+
+  // Scroll selected item into view
+  useEffect(() => {
+    if (selectedIndex >= 0 && gridRef.current) {
+      const selectedElement = gridRef.current.children[selectedIndex] as HTMLElement;
+      if (selectedElement) {
+        selectedElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        });
+      }
+    }
+  }, [selectedIndex]);
 
   const handleSelect = (website: Website) => {
-    addVisit(website.id)
-    window.open(website.url, '_blank')
+    if (!isValidUrl(website.url)) {
+      console.error('Invalid URL:', website.url);
+      return;
+    }
+    const secureUrl = ensureHttps(website.url);
+    addVisit(website.id);
+    try {
+      window.open(secureUrl, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      console.error('Error opening URL:', error);
+    }
   }
 
-  if (websites.length === 0) {
+  if (!websites || websites.length === 0) {
     return (
-      <div className="p-8 text-center text-gray-400">
-        No matching websites found
+      <div className="flex flex-col items-center justify-center p-8 text-center">
+        <div className="text-gray-400 mb-4">No websites found</div>
+        <button
+          onClick={() => onSelect({
+            id: '', title: '', url: '', visits: 0, lastVisited: 0, frecency: 0,
+            preview: undefined,
+            totalVisits: 0,
+            createdAt: 0,
+            tags: [],
+            userId: ''
+          })}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+        >
+          Add your first website
+        </button>
       </div>
     )
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {websites.map((website) => (
-        <div
-          key={website.id}
-          onClick={() => {
-            if (mode === 'normal') {
-              handleSelect(website)
-            } else {
-              onSelect(website)
-            }
-          }}
-          className={`bg-gray-800 rounded-lg p-4 transition-all duration-200 cursor-pointer
-            ${mode === 'edit' ? 'hover:ring-2 hover:ring-yellow-500 hover:scale-[1.02]' : 
-              mode === 'delete' ? 'hover:ring-2 hover:ring-red-500 hover:scale-[1.02]' : 
-              'hover:bg-gray-700'}`}
-        >
-          <div className="flex justify-between items-start">
-            <div className="flex-grow">
-              <h3 className="text-lg font-semibold text-white mb-2">{website.title}</h3>
-              <p className="text-gray-400 text-sm truncate">{website.url}</p>
+    <>
+      <div 
+        ref={gridRef}
+        className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
+      >
+        {websites.map((website, index) => (
+          <div
+            key={website.id}
+            onContextMenu={(e) => handleContextMenu(e, website)}
+            onClick={() => {
+              setSelectedIndex(index);
+              if (mode === 'normal') {
+                handleSelect(website);
+              } else {
+                onSelect(website);
+              }
+            }}
+            className={`relative group bg-gray-800 rounded-lg overflow-hidden shadow-lg transition-all duration-200 transform hover:scale-105 cursor-pointer
+              ${isEditMode ? 'ring-2 ring-yellow-500 ring-offset-2 ring-offset-gray-900' : ''}
+            `}
+          >
+            <div className="relative">
+              {website.preview ? (
+                <div className="aspect-video bg-gray-900 relative overflow-hidden">
+                  <img
+                    src={website.preview}
+                    alt={website.title}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="aspect-video bg-gray-900 flex items-center justify-center">
+                  {website.favicon ? (
+                    <img src={website.favicon} alt="" className="w-12 h-12" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center">
+                      <span className="text-2xl font-medium text-gray-400">
+                        {website.title.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {isEditMode && (
+                <div className="absolute top-2 right-2 flex space-x-2 z-10">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(website);
+                    }}
+                    className="p-2 bg-yellow-500 rounded-full hover:bg-yellow-600 transition-colors shadow-lg"
+                    title="Edit website"
+                  >
+                    <PencilSquareIcon className="h-4 w-4 text-black" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(website.id);
+                    }}
+                    className="p-2 bg-red-500 rounded-full hover:bg-red-600 transition-colors shadow-lg"
+                    title="Delete website"
+                  >
+                    <TrashIcon className="h-4 w-4 text-white" />
+                  </button>
+                </div>
+              )}
+              {isEditMode && (
+                <div className="absolute top-2 left-2">
+                  <span className="px-2 py-1 text-xs bg-yellow-500 text-black rounded-md font-medium shadow-lg">
+                    EDIT MODE
+                  </span>
+                </div>
+              )}
             </div>
-            
-            {mode === 'normal' && (
-              <a
-                href={website.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="p-1 text-gray-400 hover:text-white hover:bg-gray-600 rounded ml-2"
-                title="Open in new tab"
-              >
-                <ArrowTopRightOnSquareIcon className="w-4 h-4" />
-              </a>
+            <div className={`p-4 ${isEditMode ? 'bg-gray-800/90' : ''}`}>
+              <h3 className="font-medium text-white mb-1 truncate" title={website.title}>
+                {website.title}
+              </h3>
+              <p className="text-sm text-gray-400 truncate" title={website.url}>
+                {website.url}
+              </p>
+              {website.description && (
+                <p className="text-sm text-gray-500 mt-2 line-clamp-2">{website.description}</p>
+              )}
+              {website.tags && website.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {website.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-2 py-0.5 text-xs bg-gray-700 text-gray-300 rounded-full"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            {isEditMode && (
+              <div className="absolute inset-0 bg-black/10 pointer-events-none"></div>
             )}
           </div>
+        ))}
+      </div>
 
-          {/* Mode indicator */}
-          {mode !== 'normal' && (
-            <div className={`mt-2 text-sm font-medium
-              ${mode === 'edit' ? 'text-yellow-500' : 'text-red-500'}`}>
-              Click to {mode}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          website={contextMenu.website}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+    </>
+  );
+};
