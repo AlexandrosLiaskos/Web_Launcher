@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Web Launcher</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <circle fill="#646CFF" cx="16" cy="16" r="16"/>
+        <path d="M10,8 L22,8 C23.1045695,8 24,8.8954305 24,10 L24,22 C24,23.1045695 23.1045695,24 22,24 L10,24 C8.8954305,24 8,23.1045695 8,22 L8,10 C8,8.8954305 8.8954305,8 10,8 Z" fill="#FFFFFF"/>
+        <rect fill="#646CFF" x="12" y="12" width="8" height="2" rx="1"/>
+        <rect fill="#646CFF" x="12" y="16" width="8" height="2" rx="1"/>
+        <rect fill="#646CFF" x="12" y="20" width="8" height="2" rx="1"/>
+    </g>
+</svg>
