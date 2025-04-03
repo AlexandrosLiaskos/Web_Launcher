@@ -3,19 +3,21 @@ import { useWebsiteStore } from '../store/websiteStore';
 import { FolderIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { CanvasContextMenu } from './CanvasContextMenu';
 
+import { Website } from '../store/websiteStore'; // Import Website type if needed
+
 interface GroupSectionProps {
-  onSelect: (website: Website) => void;
+  // onSelect: (website: Website) => void; // Prop is unused
   onAddWebsite: () => void;
-  onFolderClick: (tag: string) => void;
+  onFolderClick: (groupName: string) => void; // Parameter changed to groupName
 }
 
-export function GroupSection({ onSelect, onAddWebsite, onFolderClick }: GroupSectionProps) {
-  const { websites } = useWebsiteStore();
+export function GroupSection({ onAddWebsite, onFolderClick }: GroupSectionProps) { // Removed onSelect from destructuring
+  const { websites, groups: storeGroups } = useWebsiteStore(); // Fetch groups from store
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [isHovered, setIsHovered] = useState(false);
 
-  // Get unique groups (folders)
-  const groups = [...new Set(websites.flatMap(w => w.tags))];
+  // Use groups from the store
+  // const groups = [...new Set(websites.flatMap(w => w.tags))];
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -33,17 +35,18 @@ export function GroupSection({ onSelect, onAddWebsite, onFolderClick }: GroupSec
     <div className="space-y-2" onContextMenu={handleContextMenu}>
       <div className="text-sm font-medium text-gray-400 mb-2">Groups</div>
       <div className="space-y-1">
-        {groups.map(group => {
-          const websitesInGroup = websites.filter(w => w.tags.includes(group));
+        {storeGroups.map(group => { // Iterate over storeGroups
+          // Filter websites based on group name matching a tag (current assumption)
+          const websitesInGroup = websites.filter(w => w.tags.includes(group.name));
           return (
             <div
-              key={group}
-              onClick={() => onFolderClick(group)}
+              key={group.id} // Use group.id as key
+              onClick={() => onFolderClick(group.name)} // Pass group.name to handler
               className="group px-2 py-1.5 rounded-lg hover:bg-gray-800/50 cursor-pointer flex items-center justify-between"
             >
               <div className="flex items-center gap-2">
                 <FolderIcon className="w-4 h-4 text-gray-400 group-hover:text-gray-300" />
-                <span className="text-sm text-gray-300 group-hover:text-gray-200">{group}</span>
+                <span className="text-sm text-gray-300 group-hover:text-gray-200">{group.name}</span> {/* Display group.name */}
               </div>
               <span className="text-xs text-gray-500 group-hover:text-gray-400">
                 {websitesInGroup.length}

@@ -1,23 +1,24 @@
 import React from 'react';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, FolderIcon } from '@heroicons/react/24/outline';
 
 interface CanvasContextMenuProps {
   x: number;
   y: number;
   onClose: () => void;
   onAddWebsite: () => void;
+  onConvertTagToFolder?: () => void; // Make optional as it's not always needed
 }
 
-export function CanvasContextMenu({ x, y, onClose, onAddWebsite }: CanvasContextMenuProps) {
+export function CanvasContextMenu({ x, y, onClose, onAddWebsite, onConvertTagToFolder }: CanvasContextMenuProps) {
   // Adjust position to keep menu in viewport
   const adjustedPosition = React.useMemo(() => {
     const menuWidth = 160;  // Approximate width of menu
     const menuHeight = 40;  // Approximate height of menu
-    
+
     // Get viewport dimensions
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    
+
     return {
       x: Math.min(x, viewportWidth - menuWidth),
       y: Math.min(y, viewportHeight - menuHeight)
@@ -47,18 +48,28 @@ export function CanvasContextMenu({ x, y, onClose, onAddWebsite }: CanvasContext
         top: adjustedPosition.y
       }}
     >
-      <div className="py-1">
-        <button
-          onClick={() => {
-            onAddWebsite();
-            onClose();
-          }}
-          className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 hover:text-white flex items-center gap-2"
-        >
-          <PlusIcon className="w-4 h-4" />
-          Add Website
-        </button>
-      </div>
+      <button
+        onClick={() => {
+          onAddWebsite();
+          onClose();
+        }}
+        className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 hover:text-white flex items-center gap-2"
+      >
+        <PlusIcon className="w-4 h-4" />
+        <span>Add Website</span>
+      </button>
+      {onConvertTagToFolder && (
+         <button
+            onClick={() => {
+               onConvertTagToFolder();
+               onClose();
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 hover:text-white flex items-center gap-2"
+         >
+            <FolderIcon className="w-4 h-4" />
+            <span>Convert Tag to Folder...</span>
+         </button>
+      )}
     </div>
   );
 }

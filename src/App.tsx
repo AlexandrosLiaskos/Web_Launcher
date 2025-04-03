@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { useWebsiteStore, type Website } from './store/websiteStore'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react' // Added useCallback
+import { useWebsiteStore, type Website, type AddWebsitePayload } from './store/websiteStore' // Import AddWebsitePayload
 import { WebsiteGrid } from './components/WebsiteGrid'
 import { MagnifyingGlassIcon, PlusIcon, PencilSquareIcon, ArrowDownTrayIcon, XMarkIcon, CheckIcon, ExclamationTriangleIcon, TrashIcon, FolderIcon } from '@heroicons/react/24/solid'
 import { generatePreview } from './utils/preview'
@@ -7,7 +7,8 @@ import { AuroraBackground } from './components/ui/AuroraBackground';
 import { UserAuth } from './components/UserAuth';
 import { auth } from './config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import React, { useMemo } from 'react'
+import { ensureHttps } from './utils/url'; // Added ensureHttps import
+// import React, { useMemo } from 'react' // Remove redundant import
 import { GroupSection } from './components/GroupSection';
 import { CanvasContextMenu } from './components/CanvasContextMenu';
 
@@ -65,7 +66,7 @@ const DEFAULT_WEBSITE: Partial<Website> = {
   url: '',
   description: '',
   tags: [],
-  category: '',
+  // category: '', // Removed unused category field
 }
 
 // Keyboard shortcut constants
@@ -80,12 +81,13 @@ const SHORTCUTS = {
 } as const;
 
 function App() {
-  const { websites, loadWebsites, addWebsite, editWebsite: updateWebsite, removeWebsite, getTags, addGroup } = useWebsiteStore()
+  const gridRef = useRef<HTMLDivElement>(null) // Add grid ref
+  const { websites, groups, loadWebsitesAndGroups, addWebsite, editWebsite: updateWebsite, removeWebsite, addVisit, getTags, addGroup, getWebsitesByTag, currentUser } = useWebsiteStore() // Re-added addVisit
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchActive, setIsSearchActive] = useState(false)
   const [isCommandMode, setIsCommandMode] = useState(false)
   const [selectedCommand, setSelectedCommand] = useState<CommandType>('search')
-  const [selectedWebsite, setSelectedWebsite] = useState<Website | null>(null)
+  // const [selectedWebsite, setSelectedWebsite] = useState<Website | null>(null) // Removed unused state
   const [showModal, setShowModal] = useState(false)
   const [editingWebsite, setEditingWebsite] = useState<Partial<Website>>(DEFAULT_WEBSITE)
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
@@ -93,7 +95,7 @@ function App() {
   const [showImportModal, setShowImportModal] = useState(false)
   const [importLoading, setImportLoading] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
-  const [searchMode, setSearchMode] = useState<'normal' | 'group'>('normal')
+  // const [searchMode, setSearchMode] = useState<'normal' | 'group'>('normal') // Removed unused state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showTagsModal, setShowTagsModal] = useState(false)
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -101,7 +103,7 @@ function App() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Reset states
-  const resetStates = (maintainEditMode = false) => {
+  const resetStates = useCallback((maintainEditMode = false) => { // Wrap in useCallback
     setSearchQuery('');
     setIsSearchActive(false);
     setIsCommandMode(false);
@@ -111,36 +113,154 @@ function App() {
     if (!maintainEditMode) {
       setSelectedCommand('search');
     }
-    document.activeElement instanceof HTMLElement && document.activeElement.blur();
-  };
+    // Blur safely
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  }, []); // Add dependencies if needed, seems okay without for now
 
   // Activate search mode
-  const activateSearch = () => {
+  const activateSearch = useCallback(() => { // Wrap in useCallback
     setIsSearchActive(true);
     setIsCommandMode(false);
+    // setSearchMode('normal'); // Removed: searchMode state removed
+    setSelectedTag(null);   // Ensure tag reset
     setSearchQuery('');
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
-  };
+  }, []); // Add dependencies if needed
 
   // Activate command mode
-  const activateCommandMode = () => {
+  const activateCommandMode = useCallback(() => { // Wrap in useCallback
     setIsCommandMode(true);
     setIsSearchActive(true);
     setSearchQuery('>');
+    setSelectedCommandIndex(0);
     requestAnimationFrame(() => {
       inputRef.current?.focus();
+      // Move cursor after '>'
       inputRef.current?.setSelectionRange(1, 1);
     });
-  };
+  }, []); // Add dependencies if needed
 
   // Initialize websites when component mounts
   useEffect(() => {
-    loadWebsites()
-  }, [])
+    // Load data only when currentUser is available (currentUser is the user ID string or null)
+    if (currentUser) {
+      loadWebsitesAndGroups(currentUser); // Pass the userId
+    }
+    // Intentionally not resetting websites/groups on logout here,
+    // as setCurrentUser in the store handles that.
+  }, [currentUser, loadWebsitesAndGroups]); // Depend on currentUser
 
   // Filter websites based on search query and selected tag
+  const handleWebsiteSelect = (website: Website) => {
+     // Always add visit when selected/opened
+     // Always add visit when selected/opened
+     addVisit(website.id); // Re-enabled addVisit call
+
+     if (selectedCommand === 'edit') {
+       setEditingWebsite(website)
+       setShowModal(true)
+     } else if (selectedCommand === 'delete') {
+       // Maybe add a confirmation modal later instead of window.confirm
+       if (window.confirm(`Are you sure you want to delete "${website.title}"?`)) {
+         removeWebsite(website.id)
+       }
+       // Stay in delete mode until Escape or another command is chosen
+     } else {
+       // Default action: open in new tab
+       window.open(ensureHttps(website.url), '_blank') // Ensure URL has https
+       // Optionally reset search/command mode after opening
+       // resetStates();
+     }
+     // Don't reset command mode automatically here for edit/delete
+     // Let Escape or explicit command change handle it
+     // setSelectedCommand('search')
+   }
+
+  const handleImportCommand = useCallback(async () => { // Wrap in useCallback if deps are stable
+    setImportLoading(true)
+    setShowImportModal(true)
+    setImportError(null)
+
+    try {
+      // Extension IDs
+      const chromeExtensionId = import.meta.env.VITE_CHROME_EXTENSION_ID || ''; // Use environment variable or fallback
+      const firefoxExtensionId = 'web-launcher@example.com'
+
+      // Detect browser type
+      const isFirefox = navigator.userAgent.toLowerCase().includes('firefox')
+      const extensionId = isFirefox ? firefoxExtensionId : chromeExtensionId
+
+      if (isFirefox) {
+        // Firefox - use window.postMessage
+        window.postMessage({ type: 'GET_FREQUENT_SITES', target: 'WEB_LAUNCHER_EXTENSION' }, '*')
+
+        // Set up one-time message listener for the response
+        const messagePromise = new Promise((resolve, reject) => {
+          const handleMessage = (event: any) => { // Ensure type any
+            if (event.data && event.data.source === 'WEB_LAUNCHER_EXTENSION') {
+              window.removeEventListener('message', handleMessage)
+              if (event.data.success) {
+                resolve(event.data)
+              } else {
+                reject(new Error(event.data.error || 'Failed to get browser sites'))
+              }
+            }
+          }
+          window.addEventListener('message', handleMessage)
+
+          // Timeout after 5 seconds
+          setTimeout(() => {
+            window.removeEventListener('message', handleMessage)
+            reject(new Error('Extension communication timed out. Please make sure the extension is installed.'))
+          }, 5000)
+        })
+
+        const response: any = await messagePromise // Ensure cast to any
+        if (response.sites) {
+          setBrowserSites(response.sites)
+        }
+      } else {
+        // Chrome
+        try {
+          chrome.runtime.sendMessage(
+            extensionId,
+            { type: 'GET_FREQUENT_SITES' },
+            (response: any) => { // Cast to any
+              if (chrome.runtime.lastError) {
+                throw new Error('Please install the Web Launcher extension for Chrome')
+              }
+              if (response.success) {
+                setBrowserSites(response.sites)
+              } else {
+                throw new Error(response.error || 'Failed to get browser sites')
+              }
+            }
+          )
+        } catch (error) {
+          console.error('Chrome extension error:', error)
+          throw new Error('Please install the Web Launcher extension for Chrome')
+        }
+      }
+    } catch (error) {
+      console.error('Import error:', error)
+      setImportError((error as Error).message) // Ensure cast to Error
+    } finally {
+      setImportLoading(false)
+    }
+  }, []) // Empty dependency array assuming no external state needed inside, adjust if necessary
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditingWebsite(DEFAULT_WEBSITE); // Use DEFAULT_WEBSITE instead of null
+    // Maintain edit mode by passing true to resetStates
+    resetStates(selectedCommand === 'edit');
+  };
+
+
   const filteredWebsites = useMemo(() => {
     let filtered = websites;
 
@@ -181,166 +301,169 @@ function App() {
     setSelectedWebsiteIndex(filteredWebsites.length > 0 ? 0 : -1);
   }, [filteredWebsites]);
 
-  // Filter commands based on search
-  const getFilteredCommands = () => {
-    if (!searchQuery.startsWith('>')) return []
-    const query = searchQuery.slice(1).trim().toLowerCase()
-    return COMMANDS.filter(cmd => 
+  // Filter commands based on search (Old version removed, useCallback version below is kept)
+
+  // Filter commands based on search (wrapped in useCallback)
+  const getFilteredCommands = useCallback(() => { // Wrap in useCallback
+    if (!isCommandMode || !searchQuery.startsWith('>')) return [];
+    const query = searchQuery.slice(1).trim().toLowerCase();
+    return COMMANDS.filter(cmd =>
       cmd.keywords.some(keyword => keyword.includes(query)) ||
       cmd.text.toLowerCase().includes(query) ||
       (cmd.shortcut && cmd.shortcut.slice(1).toLowerCase().includes(query))
-    )
-  }
+    );
+  }, [searchQuery, isCommandMode]);
 
-  const filteredCommands = getFilteredCommands()
+  const filteredCommands = useMemo(() => getFilteredCommands(), [getFilteredCommands]); // useMemo for filteredCommands
+
 
   // Handle command selection
-  const selectCommand = (command: Command) => {
-    setSelectedCommand(command.type)
-    setSearchQuery('')
-    if (command.type === 'add') {
-      setEditingWebsite(DEFAULT_WEBSITE)
-      setShowModal(true)
-    } else if (command.type === 'edit' || command.type === 'delete') {
-      // Edit and delete modes will be handled by WebsiteGrid selection
-    } else if (command.type === 'import') {
-      handleImportCommand()
-    }
-  }
+  const selectCommand = useCallback((command: Command) => { // Wrap in useCallback
+    setSelectedCommand(command.type);
+    setSearchQuery('');
+    setIsCommandMode(false); // Exit command mode after selection
+    setIsSearchActive(false); // Deactivate search bar visually
 
-  // Handle keyboard shortcuts and navigation
+    if (command.type === 'add') {
+      setEditingWebsite(DEFAULT_WEBSITE);
+      setShowModal(true);
+    } else if (command.type === 'edit') {
+      // 'edit' command is now active, user needs to click a website
+      // Optionally, prompt user or highlight grid
+    } else if (command.type === 'delete') {
+       // 'delete' command is now active
+    } else if (command.type === 'import') {
+      // Edit and delete modes will be handled by WebsiteGrid selection
+      handleImportCommand(); // Assuming handleImportCommand is stable or wrapped in useCallback
+    }
+    // Blur input after command selection
+     if (document.activeElement instanceof HTMLElement) {
+       document.activeElement.blur();
+     }
+  }, [handleImportCommand]); // Add dependencies
+
+  // Centralized Keyboard Handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts if we're in a modal
-      if (showModal || showImportModal) return;
+      const activeElement = document.activeElement;
+      const isInputFocused = activeElement instanceof HTMLInputElement ||
+                             activeElement instanceof HTMLTextAreaElement ||
+                             (activeElement instanceof HTMLElement && activeElement.isContentEditable);
 
-      // Don't trigger shortcuts if we're typing in an input
-      if (
-        document.activeElement instanceof HTMLInputElement ||
-        document.activeElement instanceof HTMLTextAreaElement
-      ) {
-        // But allow Escape to work even in input fields
-        if (e.key === 'Escape') {
-          if (selectedCommand === 'edit') {
-            e.preventDefault();
-            setSelectedCommand('search');
-          }
-          resetStates();
-        }
-        return;
-      }
-
-      // Handle global shortcuts
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        if (selectedCommand === 'edit') {
-          setSelectedCommand('search');
-        }
-        resetStates();
-      } else if (e.key === '/' && !isCommandMode) {
-        e.preventDefault();
-        activateSearch();
-      } else if (e.shiftKey && e.key === ':') {
-        e.preventDefault();
-        activateCommandMode();
-      } else if (e.shiftKey && e.key.toLowerCase() === 'g' && !isCommandMode) {
-        e.preventDefault();
-        setSearchMode(prev => prev === 'normal' ? 'group' : 'normal');
-      }
-
-      // Handle forward slash for search
-      if (e.key === SHORTCUTS.SEARCH_KEY && 
-          !e.ctrlKey && 
-          !e.metaKey && 
-          !e.altKey && 
-          !e.shiftKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        activateSearch();
-        return;
-      }
-
-      // Handle Shift + : for command mode
-      if (e.key === SHORTCUTS.COMMAND_KEY && 
-          !e.ctrlKey && 
-          !e.metaKey && 
-          !e.altKey && 
-          e.shiftKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        activateCommandMode();
-        return;
-      }
-
-      // Handle @ for tag search
-      if (e.key === SHORTCUTS.TAG_SEARCH_KEY && 
-          !e.ctrlKey && 
-          !e.metaKey && 
-          !e.altKey && 
-          !e.shiftKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!searchQuery.startsWith('@')) {
-          setSearchQuery('@');
-          if (inputRef.current) {
-            inputRef.current.focus();
-          }
-        }
-        return;
-      }
-
-      // Handle arrow navigation in command mode
-      if (isCommandMode && filteredCommands.length > 0) {
-        switch (e.key) {
-          case SHORTCUTS.UP:
-            e.preventDefault();
-            setSelectedCommandIndex(prev => 
-              prev > 0 ? prev - 1 : filteredCommands.length - 1
-            );
-            break;
-          case SHORTCUTS.DOWN:
-            e.preventDefault();
-            setSelectedCommandIndex(prev => 
-              prev < filteredCommands.length - 1 ? prev + 1 : 0
-            );
-            break;
-          case SHORTCUTS.ENTER:
-            if (!e.shiftKey) {
-              e.preventDefault();
-              const selectedCommand = filteredCommands[selectedCommandIndex];
-              if (selectedCommand) {
-                selectCommand(selectedCommand);
-              }
-            }
-            break;
-        }
-      }
-
-      // Handle keyboard navigation for filtered websites
+      // --- Global Escape ---
       if (e.key === SHORTCUTS.ESCAPE) {
         e.preventDefault();
         e.stopPropagation();
-        resetStates();
-      } else if (!isCommandMode && filteredWebsites.length > 0) {
-        if (e.altKey) {
-          e.preventDefault();
-          setSelectedWebsiteIndex(prev => 
-            prev >= filteredWebsites.length - 1 ? 0 : prev + 1
-          );
-        } else if (e.key === SHORTCUTS.ENTER && selectedWebsiteIndex >= 0) {
-          e.preventDefault();
-          const selectedWebsite = filteredWebsites[selectedWebsiteIndex];
-          if (selectedWebsite) {
-            window.open(selectedWebsite.url, '_blank');
-          }
+        if (showModal || showImportModal) {
+           handleCloseModal(); // Or specific close logic for import modal
+           setShowImportModal(false); // Ensure import modal closes
+        } else if (contextMenu) {
+            setContextMenu(null);
+        } else if (isCommandMode || isSearchActive || selectedTag) {
+          resetStates();
+        } else if (selectedCommand === 'edit' || selectedCommand === 'delete') {
+          setSelectedCommand('search'); // Exit edit/delete mode
+        } else {
+          resetStates(); // General reset
         }
+        return; // Escape handled, stop processing
       }
+
+      // --- Modal/Context Menu Active: Stop further processing ---
+      if (showModal || showImportModal || contextMenu) return;
+
+      // --- Input Focused ---
+      if (isInputFocused) {
+        // Inside Input: Handle navigation/submission within command palette or website selection
+        if (isCommandMode && filteredCommands.length > 0) {
+          switch (e.key) {
+            case SHORTCUTS.UP:
+              e.preventDefault();
+              setSelectedCommandIndex(prev =>
+                prev > 0 ? prev - 1 : filteredCommands.length - 1
+              );
+              break;
+            case SHORTCUTS.DOWN:
+              e.preventDefault();
+              setSelectedCommandIndex(prev =>
+                prev < filteredCommands.length - 1 ? prev + 1 : 0
+              );
+              break;
+            case SHORTCUTS.ENTER:
+              if (!e.shiftKey) { // Allow Shift+Enter for other purposes if needed
+                 e.preventDefault();
+                 const selectedCmd = filteredCommands[selectedCommandIndex];
+                 if (selectedCmd) {
+                   selectCommand(selectedCmd);
+                 }
+              }
+              break;
+            // Escape is handled globally above
+          }
+        } else if (isSearchActive && !isCommandMode && filteredWebsites.length > 0) {
+             // Potentially handle arrow keys for website selection WHILE typing?
+             // Maybe just Enter?
+             if (e.key === SHORTCUTS.ENTER && selectedWebsiteIndex >= 0) {
+                 e.preventDefault();
+                 const website = filteredWebsites[selectedWebsiteIndex];
+                 if (website) {
+                     handleWebsiteSelect(website); // Use existing select handler
+                 }
+             }
+        }
+        return; // Input handled, stop further global shortcuts
+      }
+
+      // --- Global Shortcuts (Input NOT Focused) ---
+      if (e.key === SHORTCUTS.SEARCH_KEY && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        activateSearch();
+      } else if (e.key === SHORTCUTS.COMMAND_KEY && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        activateCommandMode();
+      } else if (e.key === SHORTCUTS.TAG_SEARCH_KEY && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+         e.preventDefault();
+         // Activate search, set query to '@', focus input
+         setIsSearchActive(true);
+         setIsCommandMode(false);
+         setSearchQuery('@');
+         requestAnimationFrame(() => {
+            inputRef.current?.focus();
+            inputRef.current?.setSelectionRange(1, 1); // Cursor after @
+         });
+      } else if (e.key === SHORTCUTS.UP && !isCommandMode && filteredWebsites.length > 0) {
+         e.preventDefault();
+         setSelectedWebsiteIndex(prev => (prev <= 0 ? filteredWebsites.length - 1 : prev - 1));
+      } else if (e.key === SHORTCUTS.DOWN && !isCommandMode && filteredWebsites.length > 0) {
+         e.preventDefault();
+         setSelectedWebsiteIndex(prev => (prev >= filteredWebsites.length - 1 ? 0 : prev + 1));
+      } else if (e.key === SHORTCUTS.ENTER && !isCommandMode && selectedWebsiteIndex >= 0 && filteredWebsites.length > 0) {
+         e.preventDefault();
+         const website = filteredWebsites[selectedWebsiteIndex];
+         if (website) {
+            handleWebsiteSelect(website); // Use existing select handler
+         }
+      }
+      // Add other global shortcuts here if needed (like Shift+G)
+      else if (e.shiftKey && e.key.toLowerCase() === 'g' && !isCommandMode) {
+         e.preventDefault();
+         // setSearchMode(prev => prev === 'normal' ? 'group' : 'normal'); // Removed: searchMode state removed
+      }
+
     };
 
-    // Use capture phase to handle shortcuts before other handlers
-    window.addEventListener('keydown', handleKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [isSearchActive, isCommandMode, filteredCommands, selectedCommandIndex, showModal, showImportModal, filteredWebsites, selectedWebsiteIndex]);
+    // Use capture phase to potentially catch keys before other elements
+    // but be mindful of potential conflicts. Standard bubbling might be safer.
+    // Let's try standard bubbling first.
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+
+  }, [
+    isSearchActive, isCommandMode, filteredCommands, selectedCommandIndex,
+    showModal, showImportModal, contextMenu, filteredWebsites, selectedWebsiteIndex,
+    selectedTag, selectedCommand,
+    resetStates, activateSearch, activateCommandMode, selectCommand, handleCloseModal, handleWebsiteSelect // Include methods used inside
+  ]);
 
   // Keep selected command in view
   useEffect(() => {
@@ -350,243 +473,98 @@ function App() {
         commandElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }
-  }, [selectedCommandIndex, isCommandMode, filteredCommands.length]);
+  }, [selectedCommandIndex, isCommandMode, filteredCommands]);
 
-  // Handle search input changes
+  useEffect(() => {
+     if (!isCommandMode && selectedWebsiteIndex >= 0 && filteredWebsites.length > 0) {
+        // Ensure gridRef exists and has children
+        const gridElement = gridRef.current; // Assuming you have a ref on the WebsiteGrid container
+        if (gridElement && gridElement.children.length > selectedWebsiteIndex) {
+           const websiteElement = gridElement.children[selectedWebsiteIndex] as HTMLElement;
+           websiteElement?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+     }
+  }, [selectedWebsiteIndex, filteredWebsites, isCommandMode]); // Add gridRef to dependencies if needed
+
+  // Handle search input changes (Replaced with new logic below)
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    
-    // If the user manually types '/', ignore it
-    if (value === SHORTCUTS.SEARCH_KEY) {
-      return;
-    }
-    
     setSearchQuery(value);
-    
-    // Enter command mode if '>' is typed
+
+    // Enter/Exit command mode based on '>'
     if (value.startsWith('>')) {
-      setIsCommandMode(true);
-      setSelectedCommandIndex(0);
+      if (!isCommandMode) {
+         setIsCommandMode(true);
+         setSelectedCommandIndex(0); // Reset command selection
+      }
     } else {
-      setIsCommandMode(false);
+       if (isCommandMode) {
+           setIsCommandMode(false);
+       }
+       // Clear selected tag if user clears search or removes '@'
+       if (selectedTag && (!value.trim() || !value.startsWith('@'))) {
+           setSelectedTag(null);
+       } else if (value.startsWith('@')) {
+           // Logic to potentially auto-select tag is in filteredWebsites useMemo
+       }
     }
   };
 
-  // Handle input-specific keyboard events
-  const handleSearchInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === SHORTCUTS.ESCAPE) {
-      e.preventDefault();
-      e.stopPropagation();
-      resetStates();
-    } else if (e.shiftKey && e.key === SHORTCUTS.COMMAND_KEY) {
-      e.preventDefault();
-      e.stopPropagation();
-      activateCommandMode();
-    } else if (isCommandMode && filteredCommands.length > 0) {
-      switch (e.key) {
-        case SHORTCUTS.UP:
-          e.preventDefault();
-          setSelectedCommandIndex(prev => 
-            prev > 0 ? prev - 1 : filteredCommands.length - 1
-          );
-          break;
-        case SHORTCUTS.DOWN:
-          e.preventDefault();
-          setSelectedCommandIndex(prev => 
-            prev < filteredCommands.length - 1 ? prev + 1 : 0
-          );
-          break;
-        case SHORTCUTS.ENTER:
-          e.preventDefault();
-          const selectedCommand = filteredCommands[selectedCommandIndex];
-          if (selectedCommand) {
-            selectCommand(selectedCommand);
-          }
-          break;
-      }
-    }
-  };
+  // Handle input-specific keyboard events (REMOVED - Merged into main handler)
 
-  // Handle website selection
-  const handleWebsiteSelect = (website: Website) => {
-    if (selectedCommand === 'edit') {
-      setEditingWebsite(website)
-      setShowModal(true)
-    } else if (selectedCommand === 'delete') {
-      if (window.confirm('Are you sure you want to delete this website?')) {
-        removeWebsite(website.id)
-      }
-    } else {
-      window.open(website.url, '_blank')
-    }
-    // Reset command mode after action
-    setSelectedCommand('search')
-  }
+  // Original handleWebsiteSelect moved up
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingWebsite.title || !editingWebsite.url) return
+    // Ensure title and url exist and are strings
+    if (!editingWebsite.title?.trim() || !editingWebsite.url?.trim()) return
 
     try {
-      // Generate preview for the website
+      // Generate preview for the website (assuming URL is valid now)
       const preview = await generatePreview(editingWebsite.url);
 
+      // Prepare payload base, ensuring required fields are strings
+      const basePayload = {
+        ...editingWebsite,
+        title: editingWebsite.title.trim(),
+        url: editingWebsite.url.trim(),
+        preview: preview || editingWebsite.preview, // Keep old preview if generation fails
+        tags: editingWebsite.tags?.map(tag => tag.trim()).filter(Boolean) || [],
+      };
+
+      // Create specific payloads for add or update
+      const payloadForStore: Partial<Website> = { ...basePayload };
+
+      // Remove fields managed by the store or not allowed in updates/adds
+      delete payloadForStore.id;
+      delete payloadForStore.userId;
+      delete payloadForStore.visits;
+      delete payloadForStore.createdAt;
+      delete payloadForStore.lastVisit;
+      delete payloadForStore.deleted;
+      delete payloadForStore.deletedAt;
+
       if (editingWebsite.id) {
-        // Editing existing website
-        const updatedWebsite = {
-          ...editingWebsite,
-          preview: preview || editingWebsite.preview, // Keep old preview if generation fails
-          url: editingWebsite.url.trim(),
-          title: editingWebsite.title.trim(),
-          tags: editingWebsite.tags?.map(tag => tag.trim()).filter(Boolean) || [],
-        };
-        updateWebsite(editingWebsite.id, updatedWebsite);
+        // Editing existing website: Pass allowed fields to updateWebsite
+        updateWebsite(editingWebsite.id, payloadForStore);
       } else {
-        // Adding new website
-        const newWebsite = {
-          ...editingWebsite,
-          preview,
-          userId: auth.currentUser?.uid || '',
-          tags: editingWebsite.tags || [],
-        };
-        addWebsite(newWebsite);
+        // Adding new website: Pass payload matching AddWebsitePayload
+        addWebsite(payloadForStore as AddWebsitePayload);
       }
 
       setShowModal(false)
-      setEditingWebsite(DEFAULT_WEBSITE)
+      setEditingWebsite(DEFAULT_WEBSITE) // Reset with default
       setSelectedCommand('search')
     } catch (error) {
       console.error('Error saving website:', error);
+      // Optionally add user feedback here (e.g., toast notification)
     }
   }
 
-  // Fuzzy search implementation
-  const fzfSearch = (query: string) => {
-    if (!query || query.startsWith('>')) {
-      // When no search query, sort by total visits
-      return [...websites].sort((a, b) => b.totalVisits - a.totalVisits)
-    }
+  // Fuzzy search implementation (REMOVED)
 
-    const terms = query.toLowerCase().split(' ').filter(Boolean)
-    
-    return websites
-      .map(website => {
-        const searchableText = [
-          website.title,
-          website.url,
-          website.description,
-          ...(website.tags || []),
-          website.category
-        ].join(' ').toLowerCase()
-
-        // Calculate match score for each term
-        const scores = terms.map(term => {
-          let score = 0
-          let lastIndex = -1
-          
-          for (let i = 0; i < term.length; i++) {
-            const char = term[i]
-            const index = searchableText.indexOf(char, lastIndex + 1)
-            
-            if (index === -1) return 0
-            
-            // Bonus points for:
-            score += 1 // Base score for match
-            if (index === lastIndex + 1) score += 2 // Consecutive characters
-            if (index === 0 || /\W/.test(searchableText[index - 1])) score += 3 // Start of word
-            
-            lastIndex = index
-          }
-          
-          return score
-        })
-
-        // Website only matches if all terms have a score
-        if (scores.some(score => score === 0)) return null
-
-        // Final score is the sum of all term scores plus visit count bonus
-        const matchScore = scores.reduce((a, b) => a + b, 0) + (website.totalVisits * 0.1)
-
-        return { website, matchScore }
-      })
-      .filter(Boolean)
-      .sort((a, b) => b!.matchScore - a!.matchScore)
-      .map(result => result!.website)
-  }
-
-  const handleImportCommand = async () => {
-    setImportLoading(true)
-    setShowImportModal(true)
-    setImportError(null)
-    
-    try {
-      // Extension IDs
-      const chromeExtensionId = 'YOUR_CHROME_EXTENSION_ID'
-      const firefoxExtensionId = 'web-launcher@example.com'
-      
-      // Detect browser type
-      const isFirefox = navigator.userAgent.toLowerCase().includes('firefox')
-      const extensionId = isFirefox ? firefoxExtensionId : chromeExtensionId
-      
-      if (isFirefox) {
-        // Firefox - use window.postMessage
-        window.postMessage({ type: 'GET_FREQUENT_SITES', target: 'WEB_LAUNCHER_EXTENSION' }, '*')
-        
-        // Set up one-time message listener for the response
-        const messagePromise = new Promise((resolve, reject) => {
-          const handleMessage = (event) => {
-            if (event.data && event.data.source === 'WEB_LAUNCHER_EXTENSION') {
-              window.removeEventListener('message', handleMessage)
-              if (event.data.success) {
-                resolve(event.data)
-              } else {
-                reject(new Error(event.data.error || 'Failed to get browser sites'))
-              }
-            }
-          }
-          window.addEventListener('message', handleMessage)
-          
-          // Timeout after 5 seconds
-          setTimeout(() => {
-            window.removeEventListener('message', handleMessage)
-            reject(new Error('Extension communication timed out. Please make sure the extension is installed.'))
-          }, 5000)
-        })
-        
-        const response = await messagePromise
-        if (response.sites) {
-          setBrowserSites(response.sites)
-        }
-      } else {
-        // Chrome
-        try {
-          chrome.runtime.sendMessage(
-            extensionId,
-            { type: 'GET_FREQUENT_SITES' },
-            response => {
-              if (chrome.runtime.lastError) {
-                throw new Error('Please install the Web Launcher extension for Chrome')
-              }
-              if (response.success) {
-                setBrowserSites(response.sites)
-              } else {
-                throw new Error(response.error || 'Failed to get browser sites')
-              }
-            }
-          )
-        } catch (error) {
-          console.error('Chrome extension error:', error)
-          throw new Error('Please install the Web Launcher extension for Chrome')
-        }
-      }
-    } catch (error) {
-      console.error('Import error:', error)
-      setImportError(error.message)
-    } finally {
-      setImportLoading(false)
-    }
-  }
+  // Original handleImportCommand moved up
 
   const handleImportSelected = () => {
     const selectedSites = browserSites.filter(site => site.selected)
@@ -604,14 +582,16 @@ function App() {
       // Skip if URL already exists
       if (existingUrls.has(site.url)) return
       
+      // Call addWebsite with AddWebsitePayload
+      // The store now handles setting userId, createdAt, visits etc.
       addWebsite({
         title: site.title,
         url: site.url,
-        description: '',
-        tags: [],
-        category: '',
-        preview: undefined,
-        userId: currentUser.uid,
+        description: '', // Default or potentially add description if available
+        tags: [], // Default or potentially add tags if available
+        // category: '', // Removed category
+        preview: undefined, // Default or potentially add preview if available
+        favicon: undefined, // Default or potentially add favicon if available
       });
     })
 
@@ -638,7 +618,7 @@ function App() {
       if (user) {
         // User is signed in, see docs for a list of available properties
         // https://firebase.google.com/docs/reference/js/firebase.User
-        const uid = user.uid;
+        // const uid = user.uid; // Removed unused uid variable
         // ...
       } else {
         // User is signed out
@@ -650,49 +630,9 @@ function App() {
   }, []);
 
   // Handle modal close
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setEditingWebsite(null);
-    // Maintain edit mode by passing true to resetStates
-    resetStates(selectedCommand === 'edit');
-  };
+  // Original handleCloseModal moved up
 
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if we're in an input or contentEditable
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target instanceof HTMLElement && e.target.isContentEditable)
-      ) {
-        return;
-      }
-
-      if (e.shiftKey && e.key === ':' && !isCommandMode) {
-        e.preventDefault();
-        setIsCommandMode(true);
-        setSelectedCommand('search');
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
-      } else if (e.key === '/' && !isCommandMode) {
-        e.preventDefault();
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
-      } else if (e.key === '@' && !isCommandMode) {
-        e.preventDefault();
-        setSearchQuery('@');
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isCommandMode]);
+  // Handle keyboard shortcuts (REMOVED - Merged into main handler)
 
   // Handle context menu
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -725,69 +665,19 @@ function App() {
     }
   };
 
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value);
-    // Clear selected tag if search is cleared or doesn't match current tag
-    if (!value.trim() || (selectedTag && !value.toLowerCase().includes(selectedTag.toLowerCase()))) {
-      setSelectedTag(null);
-    }
-  };
+  // Removed unused handleSearchChange function
 
-  // Handle keyboard navigation for filtered websites
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === SHORTCUTS.ESCAPE) {
-      e.preventDefault();
-      e.stopPropagation();
-      resetStates();
-    } else if (!isCommandMode && filteredWebsites.length > 0) {
-      if (e.altKey) {
-        e.preventDefault();
-        setSelectedWebsiteIndex(prev => 
-          prev >= filteredWebsites.length - 1 ? 0 : prev + 1
-        );
-      } else if (e.key === SHORTCUTS.ENTER && selectedWebsiteIndex >= 0) {
-        e.preventDefault();
-        const selectedWebsite = filteredWebsites[selectedWebsiteIndex];
-        if (selectedWebsite) {
-          window.open(selectedWebsite.url, '_blank');
-        }
-      }
-    }
-  };
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [filteredWebsites, selectedWebsiteIndex]);
+  // Handle keyboard navigation for filtered websites (REMOVED - Merged into main handler)
 
   return (
     <AuroraBackground>
-      <div 
-        className="min-h-screen"
+      <div
+        className="min-h-screen outline-none" // Add outline-none to prevent focus ring on main div
         onContextMenu={handleContextMenu}
-        onKeyDown={(e) => {
-          if (e.shiftKey && e.key === ':') {
-            e.preventDefault();
-            setIsCommandMode(true);
-            setSelectedCommand('search');
-            if (inputRef.current) {
-              inputRef.current.focus();
-            }
-          }
-          // Handle @ for tag search
-          else if (e.key === '@') {
-            e.preventDefault();
-            if (!searchQuery.startsWith('@')) {
-              setSearchQuery('@');
-              if (inputRef.current) {
-                inputRef.current.focus();
-              }
-            }
-          }
-        }}
-        tabIndex={-1}
+        // removed onKeyDown prop
+        tabIndex={-1} // Keep tabIndex if you need the div itself to be focusable for some reason
       >
-        {/* Top Bar with Search and User Info */}
+        {/* Top Bar */}
         <div className="sticky top-0 z-30 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800 shadow-lg">
           <div className="container mx-auto px-6 py-4">
             <div className="flex items-center justify-between mb-4">
@@ -799,40 +689,8 @@ function App() {
                 ref={inputRef}
                 type="text"
                 value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    resetStates();
-                  } else if (e.shiftKey && e.key === ':') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    activateCommandMode();
-                  } else if (isCommandMode && filteredCommands.length > 0) {
-                    switch (e.key) {
-                      case SHORTCUTS.UP:
-                        e.preventDefault();
-                        setSelectedCommandIndex(prev => 
-                          prev > 0 ? prev - 1 : filteredCommands.length - 1
-                        );
-                        break;
-                      case SHORTCUTS.DOWN:
-                        e.preventDefault();
-                        setSelectedCommandIndex(prev => 
-                          prev < filteredCommands.length - 1 ? prev + 1 : 0
-                        );
-                        break;
-                      case SHORTCUTS.ENTER:
-                        e.preventDefault();
-                        const selectedCommand = filteredCommands[selectedCommandIndex];
-                        if (selectedCommand) {
-                          selectCommand(selectedCommand);
-                        }
-                        break;
-                    }
-                  }
-                }}
+                onChange={handleSearchInputChange} // Use the updated handler
+                // Remove onKeyDown here, handled globally
                 placeholder={isCommandMode ? 'Type a command...' : 'Press / to search, @ for tags, Shift+: for commands'}
                 className="w-full bg-gray-800 text-white px-4 py-3 pl-12 rounded-lg shadow-lg border border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none text-lg"
               />
@@ -847,7 +705,7 @@ function App() {
             {/* Left Sidebar */}
             <div className="w-64 flex-shrink-0 group-section">
               <GroupSection 
-                onSelect={handleWebsiteSelect} 
+                // onSelect prop removed as it's unused in GroupSection
                 onAddWebsite={() => {
                   setEditingWebsite(DEFAULT_WEBSITE);
                   setShowModal(true);
@@ -856,8 +714,8 @@ function App() {
               />
             </div>
 
-            {/* Main Grid */}
-            <div className="flex-1">
+            {/* Main Grid - Add ref here */}
+            <div className="flex-1" ref={gridRef}> {/* Add ref={gridRef} */}
               {selectedCommand === 'search' || selectedCommand === 'edit' || selectedCommand === 'delete' ? (
                 <>
                   {selectedTag && (
@@ -914,13 +772,12 @@ function App() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-gray-800 rounded-xl shadow-xl max-w-md w-full border border-gray-700">
               <div className="p-6">
-                <h3 className="text-lg font-semibold text-white mb-4">Add Folder</h3>
+                <h3 className="text-lg font-semibold text-white mb-4">Convert Tag to Folder</h3>
                 <div className="space-y-2">
-                  {getTags().filter(tag => 
-                    !websites.some(website => 
-                      website.tags.includes(tag)
-                    )
-                  ).map(tag => (
+                  {getTags().filter(tag =>
+                     // Show tags that don't already exist as a group name
+                     !groups.some(group => group.name === tag)
+                  ).map(tag => ( // NEW LOGIC: Filters based on existing group names
                     <button
                       key={tag}
                       onClick={() => {
@@ -931,12 +788,17 @@ function App() {
                     >
                       <span className="text-gray-200 group-hover:text-white">{tag}</span>
                       <span className="text-sm text-gray-400">
-                        {websites.filter(w => w.tags.includes(tag)).length} items
+                        {/* Show how many items HAVE this tag */}
+                        {getWebsitesByTag(tag).length} items
                       </span>
                     </button>
                   ))}
-                </div>
-                {getTags().length === 0 && (
+                 </div>
+                 {/* Optional: Add message if all tags are already groups */}
+                 {getTags().length > 0 && getTags().every(tag => groups.some(g => g.name === tag)) && (
+                    <p className="text-gray-400 text-center py-4">All tags have been converted to groups.</p>
+                 )}
+                 {getTags().length === 0 && (
                   <p className="text-gray-400 text-center py-4">No tags available to convert</p>
                 )}
                 <div className="mt-6 flex justify-end">
@@ -963,7 +825,7 @@ function App() {
                   type="text"
                   value={searchQuery}
                   onChange={handleSearchInputChange}
-                  onKeyDown={handleSearchInputKeyDown}
+                  // Removed handleSearchInputKeyDown prop
                   className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Type a command..."
                 />
@@ -1074,7 +936,7 @@ function App() {
                             <button
                               type="button"
                               onClick={() => {
-                                const newTags = editingWebsite.tags.filter(t => t !== tag);
+                                const newTags = editingWebsite.tags?.filter(t => t !== tag) || []; // Ensured optional chaining
                                 setEditingWebsite({ ...editingWebsite, tags: newTags });
                               }}
                               className="ml-1 text-gray-400 hover:text-gray-200"
@@ -1090,17 +952,21 @@ function App() {
                           placeholder="Type tag name and press Enter ↵"
                           className="flex-1 bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                           onKeyDown={(e) => {
+                            // Prevent global Enter shortcut from triggering when adding tags
                             if (e.key === 'Enter') {
+                              e.stopPropagation(); // Stop Enter bubbling up to global handler
                               e.preventDefault();
                               const input = e.currentTarget;
                               const tag = input.value.trim();
                               if (tag && !editingWebsite?.tags?.includes(tag)) {
-                                setEditingWebsite({
-                                  ...editingWebsite,
-                                  tags: [...(editingWebsite?.tags || []), tag],
-                                });
+                                setEditingWebsite(prev => ({ // Ensure prev is not null
+                                    ...prev,
+                                    tags: [...(prev?.tags || []), tag],
+                                }));
                                 input.value = '';
                               }
+                            } else if (e.key === 'Escape') {
+                                // Allow Escape to close modal (handled globally)
                             }
                           }}
                         />

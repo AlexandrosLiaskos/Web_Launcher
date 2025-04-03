@@ -1,16 +1,18 @@
-  <div align="center">
-    
-  # [Web Launcher 🚀](https://alexandrosliaskos.github.io/Web_MS/) 
-  
-  <img src="https://github.com/user-attachments/assets/85cddc06-e40e-45dc-bce9-fab67faf9553" width="200" alt="Web Launcher Logo">
-  
-  [![Deploy to GitHub Pages](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml/badge.svg)](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml)
-  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-  [![React](https://img.shields.io/badge/React-18.2.0-61dafb.svg)](https://reactjs.org/)
-  [![TypeScript](https://img.shields.io/badge/TypeScript-5.0.2-blue.svg)](https://www.typescriptlang.org/)
-  [![Vite](https://img.shields.io/badge/Vite-4.4.5-646cff.svg)](https://vitejs.dev/)
-  
-  🌐 [Try it now!](https://alexandrosliaskos.github.io/Web_MS/)
+# Web Launcher 🚀
+
+<div align="center">
+
+[🔗 Visit the Live Site](https://alexandrosliaskos.github.io/Web_MS/)
+
+<img src="https://github.com/user-attachments/assets/85cddc06-e40e-45dc-bce9-fab67faf9553" width="200" alt="Web Launcher Logo">
+
+[![Deploy to GitHub Pages](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml/badge.svg)](https://github.com/AlexandrosLiaskos/Web_Launcher/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![React](https://img.shields.io/badge/React-18.2.0-61dafb.svg)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0.2-blue.svg)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-4.4.5-646cff.svg)](https://vitejs.dev/)
+
+🌐 [Try it now!](https://alexandrosliaskos.github.io/Web_MS/)
 
 **An advanced web application designed to help you organize and quickly access websites from a central dashboard.**
 
@@ -21,12 +23,14 @@
 ## 🌟 Key Features
 
 ### 🔍 Intelligent Search
+
 - Fuzzy search across all fields
 - Tag-based filtering with `@` prefix
 - Real-time results as you type
 - Keyboard shortcuts for rapid navigation
 
 ### ☁️ Seamless Sync
+
 - Google authentication
 - Real-time Firebase synchronization
 - Automatic backups
@@ -35,44 +39,48 @@
 ## ⚡ Local Development
 
 1. **Prerequisites**
-   ```bash
-   Node.js 16+
-   ```
+
+    ```bash
+    Node.js 16+
+    ```
 
 2. **Installation**
-   ```bash
-   git clone https://github.com/yourusername/Web_Launcher.git
-   cd Web_Launcher
-   npm install
-   ```
+
+    ```bash
+    git clone https://github.com/yourusername/Web_Launcher.git
+    cd Web_Launcher
+    npm install
+    ```
 
 3. **Configuration**
-   Create `.env`:
-   ```env
-   VITE_FIREBASE_API_KEY=your_api_key
-   VITE_FIREBASE_AUTH_DOMAIN=your_domain
-   VITE_FIREBASE_PROJECT_ID=your_project_id
-   VITE_FIREBASE_STORAGE_BUCKET=your_bucket
-   VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-   VITE_FIREBASE_APP_ID=your_app_id
-   ```
+
+    Create `.env`:
+
+    ```env
+    VITE_FIREBASE_API_KEY=your_api_key
+    VITE_FIREBASE_AUTH_DOMAIN=your_domain
+    VITE_FIREBASE_PROJECT_ID=your_project_id
+    VITE_FIREBASE_STORAGE_BUCKET=your_bucket
+    VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+    VITE_FIREBASE_APP_ID=your_app_id
+    ```
 
 4. **Launch**
-   ```bash
-   npm run dev
-   ```
+
+    ```bash
+    npm run dev
+    ```
 
 ## ⌨️ Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `Shift + :` | Command mode |
-| `>` | Command mode |
-| `Alt` | Cycle sites |
-| `Enter` | Open site |
-| `/` | Focus search |
-| `Esc` | Clear/close |
-| `←↑↓→` | Navigate |
+| Key         | Action                        | Context                    |
+|-------------|-------------------------------|----------------------------|
+| `Shift + :` | Activate Command Mode         | Global                     |
+| `/`         | Activate Search               | Global                     |
+| `@`         | Activate Tag Search           | Global                     |
+| `Esc`       | Close Modal/Menu / Reset Mode | Global / Modal / Menu / Search / Command |
+| `↑` / `↓`   | Navigate List/Grid            | Global / Input Focused     |
+| `Enter`     | Select / Open Website/Command | Global / Input Focused     |
 
 ## 🛠️ Tech Stack
 
